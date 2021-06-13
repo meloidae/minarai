@@ -6,7 +6,7 @@ use Mix.Config
 config :minarai, :viewport, %{
   name: :main_viewport,
   size: {700, 600},
-  default_scene: {Minarai.Scene.Home, nil},
+  default_scene: {Minarai.Scene.Info, nil},
   drivers: [
     %{
       module: Scenic.Driver.Glfw,
