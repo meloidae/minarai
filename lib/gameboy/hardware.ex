@@ -39,9 +39,12 @@ defmodule Gameboy.Hardware do
     cond do
       high == 0x00 and bootrom.active ->
         machine_cycle(:memory, hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
-      high <= 0x7f -> 
-        # cartridge banking
-        raise "Read from cartridge banking at #{addr} is unimplemtend"
+      high <= 0x3f -> 
+        # cartridge rom high
+        raise "Read from cartridge rom (high) at #{addr} is unimplemtend"
+      high <= 0x7f ->
+        # cartridge rom low
+        raise "Read from cartridge rom (low) at #{addr} is unimplemtend"
       high <= 0x9f ->
         # vram
         raise "Read from vram at #{addr} is unimplemtend"
@@ -56,10 +59,10 @@ defmodule Gameboy.Hardware do
         raise "Read from wram (high) at #{addr} is unimplemtend"
       high <= 0xef ->
         # low wram (again)
-        raise "Read from wram (low) at #{addr} is unimplemtend"
+        raise "Read from echo wram (low) at #{addr} is unimplemtend"
       high <= 0xfd ->
         # high ram (again)
-        raise "Read from wram (high) at #{addr} is unimplemtend"
+        raise "Read from echo wram (high) at #{addr} is unimplemtend"
       high == 0xfe ->
         low = addr &&& 0xff
         if low <= 0x9f do
