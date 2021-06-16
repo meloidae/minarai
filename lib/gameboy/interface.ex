@@ -5,4 +5,3 @@ defprotocol Gameboy.HardwareInterface do
   def synced_write_high(hw, addr, data)
   def sync_cycle(hw)
 end
-

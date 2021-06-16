@@ -1,21 +1,25 @@
 defmodule Gameboy.Decode do
   alias Gameboy.CPU
   alias Gameboy.Execute, as: Exec
+  alias Gameboy.Utils
 
   def decode_exec(%CPU{} = cpu, hw) do
     case cpu.delayed_set_ime do
       nil ->
+        if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         instruction(cpu.opcode, cpu, hw)
       value ->
+        if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         cpu = instruction(cpu.opcode, cpu, hw)
         cpu = put_in(cpu.ime, value)
-        put_in(cpu.delayed_set_ime, nil)
+        {put_in(cpu.delayed_set_ime, nil), hw}
     end
   end
 
   def cb_prefix(%CPU{} = cpu, hw) do
-    {opcode, cpu} = CPU.fetch_imm8(cpu, hw)
-    cb_instruction(opcode, put_in(cpu.opcode, opcode), hw)
+    {cpu, hw} = CPU.fetch_next(cpu, hw, cpu.regs.pc)
+    IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
+    cb_instruction(cpu.opcode, cpu, hw)
   end
   
   # 8 bit loads
@@ -243,10 +247,10 @@ defmodule Gameboy.Decode do
   def instruction(0x2f, cpu, hw), do: Exec.cpl(cpu, hw)
 
   # 16-bit loads/pop/push
-  def instruction(0x01, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :af)
-  def instruction(0x11, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :bc)
-  def instruction(0x21, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :de)
-  def instruction(0x31, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :hl)
+  def instruction(0x01, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :bc)
+  def instruction(0x11, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :de)
+  def instruction(0x21, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :hl)
+  def instruction(0x31, cpu, hw), do: Exec.ld16_rr_nn(cpu, hw, :sp)
   def instruction(0xf9, cpu, hw), do: Exec.ld16_sp_hl(cpu, hw)
   def instruction(0xf8, cpu, hw), do: Exec.ld16_hl_sp_n(cpu, hw)
   def instruction(0x08, cpu, hw), do: Exec.ld16_nn_sp(cpu, hw)
