@@ -1,7 +1,7 @@
-defmodule Gameboy.PPU do
+defmodule Gameboy.Ppu do
   use Bitwise
   alias Gameboy.Memory
-  alias Gameboy.PPU
+  alias Gameboy.Ppu
 
   defstruct vram: struct(Memory),
             oam: struct(Memory),
@@ -24,16 +24,16 @@ defmodule Gameboy.PPU do
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    %PPU{vram: vram, oam: oam}
+    %Ppu{vram: vram, oam: oam}
   end
 
-  def read_vram(%PPU{vram: vram} = ppu, addr), do: Memory.read(vram, addr &&& @vram_mask)
+  def read_vram(%Ppu{vram: vram} = ppu, addr), do: Memory.read(vram, addr &&& @vram_mask)
 
-  def write_vram(%PPU{vram: vram} = ppu, addr, value) do
+  def write_vram(%Ppu{vram: vram} = ppu, addr, value) do
     put_in(ppu.vram, Memory.write(vram, addr &&& @vram_mask, value))
   end
 
-  def bg_palette(%PPU{bgp: bgp} = ppu), do: bgp
+  def bg_palette(%Ppu{bgp: bgp} = ppu), do: bgp
 
-  def set_bg_palette(%PPU{} = ppu, value), do: put_in(ppu.bgp, value &&& 0xff)
+  def set_bg_palette(%Ppu{} = ppu, value), do: put_in(ppu.bgp, value &&& 0xff)
 end

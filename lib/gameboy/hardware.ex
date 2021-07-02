@@ -4,18 +4,18 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Memory
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
-  alias Gameboy.PPU
-  alias Gameboy.WRAM
-  alias Gameboy.HRAM
-  alias Gameboy.APU
+  alias Gameboy.Ppu
+  alias Gameboy.Wram
+  alias Gameboy.Hram
+  alias Gameboy.Apu
   alias Gameboy.Utils
 
   defstruct bootrom: struct(Bootrom),
             cart: struct(Cartridge),
-            ppu: struct(PPU),
-            wram: struct(WRAM),
-            hram: struct(HRAM),
-            apu: struct(APU),
+            ppu: struct(Ppu),
+            wram: struct(Wram),
+            hram: struct(Hram),
+            apu: struct(Apu),
             timer: 0,
             interrupts: 0
 
@@ -34,10 +34,10 @@ defmodule Gameboy.Hardware do
   def init() do
     bootrom = Bootrom.init()
     cart = Cartridge.init()
-    ppu = PPU.init()
-    wram = WRAM.init()
-    hram = HRAM.init()
-    apu = APU.init()
+    ppu = Ppu.init()
+    wram = Wram.init()
+    hram = Hram.init()
+    apu = Apu.init()
     %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu}
   end
 
@@ -56,22 +56,22 @@ defmodule Gameboy.Hardware do
         raise "Read from cartridge rom (high) at 0x#{Utils.to_hex(addr)} is unimplemented"
       high <= 0x9f ->
         # vram
-        machine_cycle(:memory, hw, fn hw -> {PPU.read_vram(hw.ppu, addr), hw} end)
+        machine_cycle(:memory, hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
       high <= 0xbf ->
         # cartridge ram
         raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
       high <= 0xcf ->
         # low wram
-        machine_cycle(:memory, hw, fn hw -> {WRAM.read_low(hw.wram, addr), hw} end)
+        machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
       high <= 0xdf ->
         # high wram
-        machine_cycle(:memory, hw, fn hw -> {WRAM.read_high(hw.wram, addr), hw} end)
+        machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
       high <= 0xef ->
         # low wram (again)
-        machine_cycle(:memory, hw, fn hw -> {WRAM.read_low(hw.wram, addr), hw} end)
+        machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
       high <= 0xfd ->
         # high ram (again)
-        machine_cycle(:memory, hw, fn hw -> {WRAM.read_high(hw.wram, addr), hw} end)
+        machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
       high == 0xfe ->
         low = addr &&& 0xff
         if low <= 0x9f do
@@ -120,7 +120,7 @@ defmodule Gameboy.Hardware do
       0x46 ->
         raise "Read from oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
-        machine_cycle(:memory, hw, fn hw -> PPU.bg_palette(hw.ppu) end)
+        machine_cycle(:memory, hw, fn hw -> Ppu.bg_palette(hw.ppu) end)
       0x48 ->
         raise "Read from ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
       0x49 ->
@@ -130,13 +130,13 @@ defmodule Gameboy.Hardware do
       0x4b ->
         raise "Read from ppu window x at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> HRAM.read(hw.hram, addr) end)
+        machine_cycle(:memory, hw, fn hw -> Hram.read(hw.hram, addr) end)
       0xff ->
         raise "Read from interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x10 <= x and x <= 0x26 ->
-        machine_cycle(:memory, hw, fn hw -> APU.read(hw.apu, addr) end)
+        machine_cycle(:memory, hw, fn hw -> Apu.read(hw.apu, addr) end)
       x when 0x30 <= x and x <= 0x3f ->
-        machine_cycle(:memory, hw, fn hw -> APU.read(hw.apu, addr) end)
+        machine_cycle(:memory, hw, fn hw -> Apu.read(hw.apu, addr) end)
       _ ->
         raise "Read from #{Utils.to_hex(addr)} is unimplemented"
     end
@@ -154,22 +154,22 @@ defmodule Gameboy.Hardware do
         raise "Write to cartridge banking at #{Utils.to_hex(addr)} is unimplemented"
       high <= 0x9f ->
         # vram
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.ppu, PPU.write_vram(hw.ppu, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.ppu, Ppu.write_vram(hw.ppu, addr, value)) end)
       high <= 0xbf ->
         # cartridge ram
         raise "Write to ram at #{Utils.to_hex(addr)} is unimplemented"
       high <= 0xcf ->
         # low wram
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, WRAM.write_low(hw.wram, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, Wram.write_low(hw.wram, addr, value)) end)
       high <= 0xdf ->
         # high wram
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, WRAM.write_high(hw.wram, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, Wram.write_high(hw.wram, addr, value)) end)
       high <= 0xef ->
         # low wram (again)
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, WRAM.write_low(hw.wram, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, Wram.write_low(hw.wram, addr, value)) end)
       high <= 0xfd ->
         # high ram (again)
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, WRAM.write_high(hw.wram, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.wram, Wram.write_high(hw.wram, addr, value)) end)
       high == 0xfe ->
         low = addr &&& 0xff
         if low <= 0x9f do
@@ -217,7 +217,7 @@ defmodule Gameboy.Hardware do
       0x46 ->
         raise "Write to oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.ppu, PPU.set_bg_palette(hw.ppu, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.ppu, Ppu.set_bg_palette(hw.ppu, value)) end)
       0x48 ->
         raise "Write to ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
       0x49 ->
@@ -227,13 +227,13 @@ defmodule Gameboy.Hardware do
       0x4b ->
         raise "Write to ppu window x at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.hram, HRAM.write(hw.hram, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.hram, Hram.write(hw.hram, addr, value)) end)
       0xff ->
         raise "Write to interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x10 <= x and x <= 0x26 ->
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.apu, APU.write(hw.apu, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.apu, Apu.write(hw.apu, addr, value)) end)
       x when 0x30 <= x and x <= 0x3f ->
-        machine_cycle(:memory, hw, fn hw -> put_in(hw.apu, APU.write(hw.apu, addr, value)) end)
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.apu, Apu.write(hw.apu, addr, value)) end)
       _ ->
         raise "Write to #{Utils.to_hex(addr)} is unimplemented"
     end

@@ -1,9 +1,9 @@
-defmodule Gameboy.CPU.Decode do
-  alias Gameboy.CPU
-  alias Gameboy.CPU.Execute, as: Exec
+defmodule Gameboy.Cpu.Decode do
+  alias Gameboy.Cpu
+  alias Gameboy.Cpu.Execute, as: Exec
   alias Gameboy.Utils
 
-  def decode_exec(%CPU{} = cpu, hw) do
+  def decode_exec(%Cpu{} = cpu, hw) do
     case cpu.delayed_set_ime do
       nil ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
@@ -16,8 +16,8 @@ defmodule Gameboy.CPU.Decode do
     end
   end
 
-  def cb_prefix(%CPU{} = cpu, hw) do
-    {cpu, hw} = CPU.fetch_next(cpu, hw, cpu.regs.pc)
+  def cb_prefix(%Cpu{} = cpu, hw) do
+    {cpu, hw} = Cpu.fetch_next(cpu, hw, cpu.regs.pc)
     # IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
     cb_instruction(cpu.opcode, cpu, hw)
   end

@@ -1,13 +1,13 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
-  alias Gameboy.CPU
-  import Gameboy.CPU, only: [fetch_next: 3, handle_interrupt: 2]
-  import Gameboy.CPU.Decode, only: [decode_exec: 2]
+  alias Gameboy.Cpu
+  import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
+  import Gameboy.Cpu.Decode, only: [decode_exec: 2]
 
-  defstruct cpu: struct(CPU), hw: struct(Hardware), ppu: 0
+  defstruct cpu: struct(Cpu), hw: struct(Hardware), ppu: 0
 
   def init do
-    cpu = CPU.init()
+    cpu = Cpu.init()
     hw = Hardware.init()
     %Gameboy{cpu: cpu, hw: hw}
   end

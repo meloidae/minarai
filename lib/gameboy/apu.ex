@@ -1,6 +1,6 @@
-defmodule Gameboy.APU do
+defmodule Gameboy.Apu do
   use Bitwise
-  alias Gameboy.APU
+  alias Gameboy.Apu
   alias Gameboy.Memory
 
   # Just implement read/write for now. No real audio functionality
@@ -10,7 +10,7 @@ defmodule Gameboy.APU do
 
   def init do
     memory = Memory.init(0x40)
-    %APU{memory: memory}
+    %Apu{memory: memory}
   end
 
   def read(%{memory: memory} = apu, addr), do: Memory.read(memory, addr &&& @apu_mask)
