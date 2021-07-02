@@ -50,10 +50,10 @@ defmodule Gameboy.Hardware do
         machine_cycle(:memory, hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
       high <= 0x3f -> 
         # cartridge rom low
-        raise "Read from cartridge rom (low) at 0x#{Utils.to_hex(addr)} is unimplemented"
+        machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
       high <= 0x7f ->
         # cartridge rom high
-        raise "Read from cartridge rom (high) at 0x#{Utils.to_hex(addr)} is unimplemented"
+        machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
       high <= 0x9f ->
         # vram
         machine_cycle(:memory, hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
@@ -151,6 +151,7 @@ defmodule Gameboy.Hardware do
         machine_cycle(:memory, hw, fn hw -> put_in(hw.bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
       high <= 0x7f ->
         # cartridge banking
+        machine_cycle(:memory, hw, fn hw -> put_in(hw.cart, Cart.set_bank_control(hw.cart, addr, value)) end)
         raise "Write to cartridge banking at #{Utils.to_hex(addr)} is unimplemented"
       high <= 0x9f ->
         # vram
