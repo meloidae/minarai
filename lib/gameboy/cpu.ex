@@ -140,8 +140,8 @@ defmodule Gameboy.Cpu do
   # Add two u16 values, then get carries from bit 7 (carry) and bit 3 (half carry)
   def add_u16_byte_carry(a, b) do
     sum = (a + b) &&& 0xffff
-    carry = ((a &&& 0xff) + (b &&& 0xff)) &&& 0x100 != 0
-    half_carry = ((a &&& 0xf) + (b &&& 0xf)) &&& 0x10 != 0
+    carry = (((a &&& 0xff) + (b &&& 0xff)) &&& 0x100) != 0
+    half_carry = (((a &&& 0xf) + (b &&& 0xf)) &&& 0x10) != 0
     {sum, carry, half_carry}
   end
   def add_u16_byte_carry(a, b, _), do: add_u16_byte_carry(a, b)
@@ -149,8 +149,8 @@ defmodule Gameboy.Cpu do
   # Add two u16 values, then get carries from bit 15 (carry) and bit 11 (half carry)
   def add_u16_word_carry(a, b) do
     sum = (a + b) &&& 0xffff
-    carry = (a + b) &&& 0x10000 != 0
-    half_carry = ((a &&& 0xfff) + (b &&& 0xfff)) &&& 0x1000 != 0
+    carry = ((a + b) &&& 0x10000) != 0
+    half_carry = (((a &&& 0xfff) + (b &&& 0xfff)) &&& 0x1000) != 0
     {sum, carry, half_carry}
   end
   def add_u16_word_carry(a, b, _), do: add_u16_word_carry(a, b)
@@ -168,8 +168,8 @@ defmodule Gameboy.Cpu do
   def adc_u8_byte_carry(a, b, %Cpu{} = cpu) do
     c = if flag(cpu, :c), do: 1, else: 0
     sum = (a + b + c) &&& 0xff
-    carry = (a + b + c) &&& 0x100 != 0
-    half_carry = ((a &&& 0xf) + (b &&& 0xf) + c) &&& 0x10 != 0
+    carry = ((a + b + c) &&& 0x100) != 0
+    half_carry = (((a &&& 0xf) + (b &&& 0xf) + c) &&& 0x10) != 0
     {sum, carry, half_carry}
   end
 
@@ -193,7 +193,7 @@ defmodule Gameboy.Cpu do
 
   # Rotate u8 value to left, old bit 7 to carry
   def rlc_u8_byte_carry(value) do
-    carry = value &&& 0x80 != 0
+    carry = (value &&& 0x80) != 0
     value = if carry, do: (value <<< 1) ||| 0x1, else: value <<< 1
     value = value &&& 0xff
     {value, carry}
@@ -202,7 +202,7 @@ defmodule Gameboy.Cpu do
 
   # Roate u8 value to left through carry flag, old bit 7 to carry
   def rl_u8_byte_carry(value, %Cpu{} = cpu) do
-    carry = value &&& 0x80 != 0
+    carry = (value &&& 0x80) != 0
     value = if flag(cpu, :c), do: (value <<< 1) ||| 0x1, else: value <<< 1
     value = value &&& 0xff
     {value, carry}
@@ -210,7 +210,7 @@ defmodule Gameboy.Cpu do
 
   # Rotate u8 value to right, old bit 0 to carry
   def rrc_u8_byte_carry(value) do
-    carry = value &&& 0x1 != 0
+    carry = (value &&& 0x1) != 0
     value = if carry, do: (value >>> 1) ||| 0x80, else: value >>> 1
     value = value &&& 0xff
     {value, carry}
@@ -219,7 +219,7 @@ defmodule Gameboy.Cpu do
 
   # Rotate u8 value to right through carry flag, old bit 0 to carry
   def rr_u8_byte_carry(value, %Cpu{} = cpu) do
-    carry = value &&& 0x1 != 0
+    carry = (value &&& 0x1) != 0
     value = if flag(cpu, :c), do: (value >>> 1) ||| 0x80, else: value >>> 1
     value = value &&& 0xff
     {value, carry}
@@ -227,7 +227,7 @@ defmodule Gameboy.Cpu do
 
   # Shift u8 value to left, lsb is set to 0
   def sla_u8_byte_carry(value) do
-    carry = value &&& 0x80 != 0
+    carry = (value &&& 0x80) != 0
     value = (value <<< 1) &&& 0xff
     {value, carry}
   end
@@ -235,7 +235,7 @@ defmodule Gameboy.Cpu do
 
   # Shift u8 value to right, msb doesn't change
   def sra_u8_byte_carry(value) do
-    carry = value &&& 0x1 != 0
+    carry = (value &&& 0x1) != 0
     msb = value &&& 0x80
     value = (value >>> 1) ||| msb
     {value, carry}
@@ -244,7 +244,7 @@ defmodule Gameboy.Cpu do
 
   # Shift u8 value to right, msb is set to 0
   def srl_u8_byte_carry(value) do
-    carry = value &&& 0x1 != 0
+    carry = (value &&& 0x1) != 0
     value = value >>> 1
     {value, carry}
   end
