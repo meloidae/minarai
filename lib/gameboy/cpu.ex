@@ -1,7 +1,7 @@
 defmodule Gameboy.CPU do
   use Bitwise
   alias Gameboy.CPU
-  alias Gameboy.HardwareInterface, as: HWI
+  alias Gameboy.Hardware
   alias Gameboy.Utils
 
   defmodule RegisterFile do
@@ -34,7 +34,7 @@ defmodule Gameboy.CPU do
 
   # Fetch opcode for instruction and increment pc
   def fetch_next(%CPU{} = cpu, hw, addr) do
-    {opcode, hw} = HWI.synced_read(hw, addr)
+    {opcode, hw} = Hardware.synced_read(hw, addr)
     {write_register(put_in(cpu.opcode, opcode), :pc, (addr + 1) &&& 0xffff), hw}
   end
 
@@ -158,8 +158,8 @@ defmodule Gameboy.CPU do
   # Add two u8 values, then get carries from bit 7 (carry) and bit 3 (half carry)
   def add_u8_byte_carry(a, b) do
     sum = (a + b) &&& 0xff
-    carry = (a + b) &&& 0x100 != 0
-    half_carry = ((a &&& 0xf) + (b &&& 0xf)) &&& 0x10 != 0
+    carry = ((a + b) &&& 0x100) != 0
+    half_carry = (((a &&& 0xf) + (b &&& 0xf)) &&& 0x10) != 0
     {sum, carry, half_carry}
   end
   def add_u8_byte_carry(a, b, _), do: add_u8_byte_carry(a, b)
@@ -250,14 +250,14 @@ defmodule Gameboy.CPU do
   end
   def srl_u8_byte_carry(value, _), do: srl_u8_byte_carry(value)
 
-  # Fetch 8 bit value at pc. Returns tuple of {value, cpu} as pc is incremented
+  # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
   def fetch_imm8(%CPU{} = cpu, hw) do
     addr = cpu.regs.pc
-    {value, hw} = HWI.synced_read(hw, addr)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, write_register(cpu, :pc, (addr + 1) &&& 0xffff), hw}
   end
 
-  # Fetch 16 bit value at pc. Returns tuple of {value, cpu} as pc is incremented
+  # Fetch 16 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
   def fetch_imm16(%CPU{} = cpu, hw) do
     {low, cpu, hw} = fetch_imm8(cpu, hw)
     {high, cpu, hw} = fetch_imm8(cpu, hw)
@@ -271,18 +271,18 @@ defmodule Gameboy.CPU do
     high = (data >>> 8) &&& 0xff
     sp = CPU.read_register(cpu, :sp)
     sp = (sp - 1) &&& 0xffff
-    hw = HWI.synced_write(hw, sp, high)
+    hw = Hardware.synced_write(hw, sp, high)
     sp = (sp - 1) &&& 0xffff
-    hw = HWI.synced_write(hw, sp, low)
+    hw = Hardware.synced_write(hw, sp, low)
     {CPU.write_register(cpu, :sp, sp), hw}
   end
 
   # Pop 16 bit value from stack
   def pop_u16(%CPU{} = cpu, hw) do
     sp = CPU.read_register(cpu, :sp)
-    {low, hw} = HWI.synced_read(hw, sp)
+    {low, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
-    {high, hw} = HWI.synced_read(hw, sp)
+    {high, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
     {(high <<< 8) ||| low, CPU.write_register(cpu, :sp, sp), hw}
   end
@@ -300,7 +300,7 @@ defmodule Gameboy.CPU do
   for reg <- [:bc, :de, :hl] do
     def read(%CPU{} = cpu, unquote(reg), hw) do
       addr = read_register(cpu, unquote(reg))
-      {value, hw} = HWI.synced_read(hw, addr) 
+      {value, hw} = Hardware.synced_read(hw, addr) 
       {value, cpu, hw}
     end
   end
@@ -309,29 +309,29 @@ defmodule Gameboy.CPU do
   def read(%CPU{} = cpu, :hld, hw) do
     addr = read_register(cpu, :hl)
     cpu = write_register(cpu, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
-    {value, hw} = HWI.synced_read(hw, addr)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, cpu, hw}
   end
 
   def read(%CPU{} = cpu, :hli, hw) do
     addr = read_register(cpu, :hl)
     cpu = write_register(cpu, :hl, (addr + 1) &&& 0xffff)  # wrapping add
-    {value, hw} = HWI.synced_read(hw, addr)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, cpu, hw}
   end
 
   # read for immediate addr
   def read(%CPU{} = cpu, :immaddr, hw) do
-    {addr, cpu} = fetch_imm16(cpu, hw)
-    {value, hw} = HWI.synced_read(hw, addr)
+    {addr, cpu, hw} = fetch_imm16(cpu, hw)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, cpu, hw}
   end
 
   # read for high address (uses 8 bit immediate value for addr)
   def read(%CPU{} = cpu, :hi, hw) do
-    {addr, cpu} = fetch_imm8(cpu, hw)
+    {addr, cpu, hw} = fetch_imm8(cpu, hw)
     addr = 0xff00 ||| addr
-    {value, hw} = HWI.synced_read(hw, addr)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, cpu, hw}
   end
 
@@ -339,7 +339,7 @@ defmodule Gameboy.CPU do
   def read(%CPU{} = cpu, :hic, hw) do
     addr = read_register(cpu, :c)
     addr = 0xff00 ||| addr
-    {value, hw} = HWI.synced_read(hw, addr)
+    {value, hw} = Hardware.synced_read(hw, addr)
     {value, cpu, hw}
   end
 
@@ -353,7 +353,7 @@ defmodule Gameboy.CPU do
   for reg <- [:bc, :de, :hl] do
     def write(%CPU{} = cpu, unquote(reg), hw, data) do
       addr = read_register(cpu, unquote(reg))
-      {cpu, HWI.synced_write(hw, addr, data)}
+      {cpu, Hardware.synced_write(hw, addr, data)}
     end
   end
 
@@ -361,33 +361,35 @@ defmodule Gameboy.CPU do
   def write(%CPU{} = cpu, :hld, hw, data) do
     addr = read_register(cpu, :hl)
     cpu = write_register(cpu, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
-    {cpu, HWI.synced_write(hw, addr, data)}
+    {cpu, Hardware.synced_write(hw, addr, data)}
   end
 
   def write(%CPU{} = cpu, :hli, hw, data) do
     addr = read_register(cpu, :hl)
     cpu = write_register(cpu, :hl, (addr + 1) &&& 0xffff)  # wrapping add
-    {cpu, HWI.synced_write(hw, addr, data)}
+    {cpu, Hardware.synced_write(hw, addr, data)}
   end
 
   # write for immediate addr
   def write(%CPU{} = cpu, :immaddr, hw, data) do
-    {addr, cpu} = fetch_imm16(cpu, hw)
-    {cpu, HWI.synced_write(hw, addr, data)}
+    {addr, cpu, hw} = fetch_imm16(cpu, hw)
+    {cpu, Hardware.synced_write(hw, addr, data)}
   end
 
   # write for high address (uses 8 bit immediate value for addr)
   def write(%CPU{} = cpu, :hi, hw, data) do
-    {addr, cpu} = fetch_imm8(cpu, hw)
+    IO.puts("cpu: #{inspect(cpu)}")
+    IO.puts("data: #{Utils.to_hex(data)}")
+    {addr, cpu, hw} = fetch_imm8(cpu, hw)
     addr = 0xff00 ||| addr
-    {cpu, HWI.synced_write(hw, addr, data)}
+    {cpu, Hardware.synced_write(hw, addr, data)}
   end
 
   # write for high address but address is taken from c
   def write(%CPU{} = cpu, :hic, hw, data) do
     addr = read_register(cpu, :c)
     addr = 0xff00 ||| addr
-    {cpu, HWI.synced_write(hw, addr, data)}
+    {cpu, Hardware.synced_write(hw, addr, data)}
   end
 
 end

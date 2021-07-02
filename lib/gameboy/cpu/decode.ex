@@ -1,15 +1,15 @@
-defmodule Gameboy.Decode do
+defmodule Gameboy.CPU.Decode do
   alias Gameboy.CPU
-  alias Gameboy.Execute, as: Exec
+  alias Gameboy.CPU.Execute, as: Exec
   alias Gameboy.Utils
 
   def decode_exec(%CPU{} = cpu, hw) do
     case cpu.delayed_set_ime do
       nil ->
-        if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
+        # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         instruction(cpu.opcode, cpu, hw)
       value ->
-        if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
+        # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         cpu = instruction(cpu.opcode, cpu, hw)
         cpu = put_in(cpu.ime, value)
         {put_in(cpu.delayed_set_ime, nil), hw}
@@ -18,7 +18,7 @@ defmodule Gameboy.Decode do
 
   def cb_prefix(%CPU{} = cpu, hw) do
     {cpu, hw} = CPU.fetch_next(cpu, hw, cpu.regs.pc)
-    IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
+    # IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
     cb_instruction(cpu.opcode, cpu, hw)
   end
   

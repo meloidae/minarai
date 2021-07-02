@@ -11,4 +11,8 @@ defmodule Gameboy.Bootrom do
   end
 
   def read(%{memory: memory} = bootrom, addr), do: Memory.read(memory, addr)
+
+  def write(%{memory: memory} = bootrom, addr, data) do
+    put_in(bootrom.memory, Memory.write(memory, addr, data))
+  end
 end

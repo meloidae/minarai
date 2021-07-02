@@ -1,9 +1,8 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
   alias Gameboy.CPU
-  alias Gameboy.Decode
   import Gameboy.CPU, only: [fetch_next: 3, handle_interrupt: 2]
-  import Gameboy.Decode, only: [decode_exec: 2]
+  import Gameboy.CPU.Decode, only: [decode_exec: 2]
 
   defstruct cpu: struct(CPU), hw: struct(Hardware), ppu: 0
 
@@ -25,7 +24,7 @@ defmodule Gameboy do
         pc = cpu.regs.pc
         {cpu, hw} = fetch_next(cpu, hw, pc)
         cpu = put_in(cpu.regs.pc, pc)
-        {cpu, hw} = decode_exec(cpu, put_in(cpu.state, :running))
+        {cpu, hw} = decode_exec(put_in(cpu.state, :running), hw)
       _ ->
         {cpu, hw}
     end

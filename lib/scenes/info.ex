@@ -4,6 +4,8 @@ defmodule Minarai.Scene.Info do
   alias Scenic.ViewPort
   import Scenic.Primitives, only: [text: 3]
 
+  alias Gameboy.Utils
+
   # Constants
   @graph Graph.build(font: :roboto, font_size: 24)
   @frame_ms 192
@@ -35,6 +37,7 @@ defmodule Minarai.Scene.Info do
     graph = @graph
             |> text(inspect(gb.cpu), fill: :white, translate: position)
 
+    send(self(), :step)
     {:ok, state, push: graph}
   end
 
@@ -42,6 +45,12 @@ defmodule Minarai.Scene.Info do
     graph = state.graph
             |> print_info(gb.cpu, position)
     {:noreply, state, push: graph}
+  end
+
+  def handle_info(:step, state) do
+    gb = Gameboy.step(state.gb)
+    if !Utils.break_point(gb), do: send(self(), :step)
+    {:noreply, put_in(state.gb, gb)}
   end
 
 
