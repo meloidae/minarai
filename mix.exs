@@ -26,6 +26,7 @@ defmodule Minarai.MixProject do
       {:font_metrics, "0.3.1"},
       {:scenic, "~> 0.10"},
       {:scenic_driver_glfw, "~> 0.10", targets: :host},
+      {:exprof, "~> 0.2.0"}
     ]
   end
 end

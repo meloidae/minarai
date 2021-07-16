@@ -5,7 +5,7 @@ defmodule Gameboy.Utils do
     if zeros > 0, do: "#{String.duplicate("0", zeros)}#{num_string}", else: num_string
   end
 
-  def break_point(%{cpu: cpu} = gb, target_pc \\ 0x000f) do
+  def break_point(%{cpu: cpu} = gb, target_pc \\ 0x001c) do
     cpu.regs.pc >= target_pc
   end
 end

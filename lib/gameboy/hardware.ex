@@ -8,6 +8,7 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Wram
   alias Gameboy.Hram
   alias Gameboy.Apu
+  alias Gameboy.Interrupts
   alias Gameboy.Utils
 
   defstruct bootrom: struct(Bootrom),
@@ -17,7 +18,8 @@ defmodule Gameboy.Hardware do
             hram: struct(Hram),
             apu: struct(Apu),
             timer: 0,
-            interrupts: 0
+            intr: struct(Interrupts),
+            counter: 0
 
   def synced_read(hw, addr) do
     Hardware.read(hw, addr)
@@ -120,7 +122,7 @@ defmodule Gameboy.Hardware do
       0x46 ->
         raise "Read from oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
-        machine_cycle(:memory, hw, fn hw -> Ppu.bg_palette(hw.ppu) end)
+        machine_cycle(:memory, hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
       0x48 ->
         raise "Read from ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
       0x49 ->
@@ -130,13 +132,13 @@ defmodule Gameboy.Hardware do
       0x4b ->
         raise "Read from ppu window x at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> Hram.read(hw.hram, addr) end)
+        machine_cycle(:memory, hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
       0xff ->
-        raise "Read from interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
+        machine_cycle(:memory, hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
       x when 0x10 <= x and x <= 0x26 ->
-        machine_cycle(:memory, hw, fn hw -> Apu.read(hw.apu, addr) end)
+        machine_cycle(:memory, hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
       x when 0x30 <= x and x <= 0x3f ->
-        machine_cycle(:memory, hw, fn hw -> Apu.read(hw.apu, addr) end)
+        machine_cycle(:memory, hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
       _ ->
         raise "Read from #{Utils.to_hex(addr)} is unimplemented"
     end
@@ -251,11 +253,12 @@ defmodule Gameboy.Hardware do
     # timer
   end
 
-  def machine_cycle(_, hw, _) do
+  def machine_cycle(_, %Hardware{ppu: ppu, counter: counter} = hw, _) do
     # oam
     # ppu
+    ppu = Ppu.cycle(ppu)
     # timer
-    hw
+    %{hw | ppu: ppu, counter: counter + 4}
   end
 
 end

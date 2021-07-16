@@ -5,7 +5,7 @@ use Mix.Config
 # Configure the main viewport for the Scenic application
 config :minarai, :viewport, %{
   name: :main_viewport,
-  size: {700, 600},
+  size: {320, 288},
   default_scene: {Minarai.Scene.Info, nil},
   drivers: [
     %{

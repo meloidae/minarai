@@ -35,7 +35,7 @@ defmodule Gameboy.Cpu do
   # Fetch opcode for instruction and increment pc
   def fetch_next(%Cpu{} = cpu, hw, addr) do
     {opcode, hw} = Hardware.synced_read(hw, addr)
-    {write_register(put_in(cpu.opcode, opcode), :pc, (addr + 1) &&& 0xffff), hw}
+    {write_register(Map.put(cpu, :opcode opcode), :pc, (addr + 1) &&& 0xffff), hw}
   end
 
   # handle interrupt
@@ -55,11 +55,13 @@ defmodule Gameboy.Cpu do
 
 
   # 8 bit reads from a register
-  def read_register(%Cpu{} = cpu, :a), do: cpu.regs.af >>> 8 &&& 0xff
+  def read_register(%Cpu{} = cpu, :a), do: (cpu.regs.af >>> 8) &&& 0xff
   def read_register(%Cpu{} = cpu, :f), do: cpu.regs.af &&& 0xff
-  def read_register(%Cpu{} = cpu, :b), do: cpu.regs.bc >>> 8 &&& 0xff
+  def read_register(%Cpu{} = cpu, :b), do: (cpu.regs.bc >>> 8) &&& 0xff
   def read_register(%Cpu{} = cpu, :c), do: cpu.regs.bc &&& 0xff
-  def read_register(%Cpu{} = cpu, :h), do: cpu.regs.hl >>> 8 &&& 0xff
+  def read_register(%Cpu{} = cpu, :d), do: (cpu.regs.de >>> 8) &&& 0xff
+  def read_register(%Cpu{} = cpu, :e), do: cpu.regs.de &&& 0xff
+  def read_register(%Cpu{} = cpu, :h), do: (cpu.regs.hl >>> 8) &&& 0xff
   def read_register(%Cpu{} = cpu, :l), do: cpu.regs.hl &&& 0xff
 
 
@@ -378,8 +380,8 @@ defmodule Gameboy.Cpu do
 
   # write for high address (uses 8 bit immediate value for addr)
   def write(%Cpu{} = cpu, :hi, hw, data) do
-    IO.puts("cpu: #{inspect(cpu)}")
-    IO.puts("data: #{Utils.to_hex(data)}")
+    # IO.puts("cpu: #{inspect(cpu)}")
+    # IO.puts("data: #{Utils.to_hex(data)}")
     {addr, cpu, hw} = fetch_imm8(cpu, hw)
     addr = 0xff00 ||| addr
     {cpu, Hardware.synced_write(hw, addr, data)}

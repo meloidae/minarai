@@ -4,7 +4,7 @@ defmodule Gameboy do
   import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   import Gameboy.Cpu.Decode, only: [decode_exec: 2]
 
-  defstruct cpu: struct(Cpu), hw: struct(Hardware), ppu: 0
+  defstruct cpu: struct(Cpu), hw: struct(Hardware)
 
   def init do
     cpu = Cpu.init()
