@@ -11,13 +11,13 @@ defmodule Gameboy.Cpu.Decode do
       value ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         cpu = instruction(cpu.opcode, cpu, hw)
-        cpu = put_in(cpu.ime, value)
-        {put_in(cpu.delayed_set_ime, nil), hw}
+        cpu = Map.put(cpu, :ime, value)
+        {Map.put(cpu, :delayed_set_ime, nil), hw}
     end
   end
 
   def cb_prefix(%Cpu{} = cpu, hw) do
-    {cpu, hw} = Cpu.fetch_next(cpu, hw, cpu.regs.pc)
+    {cpu, hw} = Cpu.fetch_next(cpu, hw, cpu.pc)
     # IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
     cb_instruction(cpu.opcode, cpu, hw)
   end

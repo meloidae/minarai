@@ -240,8 +240,8 @@ defmodule Gameboy.Cpu.Execute do
     c = Cpu.flag(cpu, :c)
     h = Cpu.flag(cpu, :h)
     {carry, a} = if !Cpu.flag(cpu, :n) do # After add/adc
-      {carry, a} = if c ||| a > 0x99, do: {true, (a + 0x60) &&& 0xff}, else: {false, a}
-      a = if h ||| (a &&& 0x0f) > 0x09, do: (a + 0x06) &&& 0xff, else: a
+      {carry, a} = if c or (a > 0x99), do: {true, (a + 0x60) &&& 0xff}, else: {false, a}
+      a = if h or (a &&& 0x0f) > 0x09, do: (a + 0x06) &&& 0xff, else: a
       {carry, a}
     else # After sub/sbc
       case {c, h} do
@@ -320,14 +320,14 @@ defmodule Gameboy.Cpu.Execute do
   # 4 cycles
   # Disable interrupt immediately (unlike how ei is delayed)
   def di(%Cpu{} = cpu, hw) do
-    {put_in(cpu.ime, false), hw}
+    {Map.put(cpu, :ime, false), hw}
   end
 
   # EI
   # 4 cycles
   # Enable interrupt (but is delayed)
   def ei(%Cpu{} = cpu, hw) do
-    {put_in(cpu.delayed_set_ime, true), hw}
+    {Map.put(cpu, :delayed_set_ime, true), hw}
   end
 
   # Rotation/Shifts
@@ -433,10 +433,12 @@ defmodule Gameboy.Cpu.Execute do
   def jr_n(%Cpu{} = cpu, hw) do
     # fetch immediate value first (increments pc)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
+    # IO.puts("jr +0x#{offset}")
     addr = Cpu.read_register(cpu, :pc)
     msb = offset &&& 0x80
-    offset = if msb != 0, do: (~~~offset + 1) &&& 0xffff, else: offset
-    cpu = Cpu.write_register(cpu, :pc, (addr + offset) && 0xffff)
+    # offset = if msb != 0, do: (~~~offset + 1) &&& 0xffff, else: offset
+    offset = if msb != 0, do: offset ||| 0xff00, else: offset
+    cpu = Cpu.write_register(cpu, :pc, (addr + offset) &&& 0xffff)
     {cpu, Hardware.sync_cycle(hw)}
   end
   # JR cc, n
@@ -514,7 +516,7 @@ defmodule Gameboy.Cpu.Execute do
   # 16 cycles
   # Do return and enable interrupts right away (not delayed like EI)
   def reti(%Cpu{} = cpu, hw) do
-    cpu = put_in(cpu.ime, true)
+    cpu = Map.put(cpu, :ime, true)
     {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
     cpu = Cpu.write_register(cpu, :sp, addr)
     {cpu, Hardware.sync_cycle(hw)}

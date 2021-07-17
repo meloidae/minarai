@@ -17,14 +17,14 @@ defmodule Gameboy do
     {cpu, hw} = handle_interrupt(cpu, hw)
     {cpu, hw} = case cpu.state do
       :running ->
-        {cpu, hw} = fetch_next(cpu, hw, cpu.regs.pc)
+        {cpu, hw} = fetch_next(cpu, hw, cpu.pc)
         {cpu, hw} = decode_exec(cpu, hw)
       :haltbug ->
         # Halt bug. Fetch but don't increment pc
-        pc = cpu.regs.pc
+        pc = cpu.pc
         {cpu, hw} = fetch_next(cpu, hw, pc)
-        cpu = put_in(cpu.regs.pc, pc)
-        {cpu, hw} = decode_exec(put_in(cpu.state, :running), hw)
+        cpu = Map.put(cpu, :pc, pc)
+        {cpu, hw} = decode_exec(Map.put(cpu, :state, :running), hw)
       _ ->
         {cpu, hw}
     end

@@ -16,6 +16,6 @@ defmodule Gameboy.Apu do
   def read(%{memory: memory} = apu, addr), do: Memory.read(memory, addr &&& @apu_mask)
 
   def write(%{memory: memory} = apu, addr, value) do
-    put_in(apu.memory, Memory.write(memory, addr &&& @apu_mask, value))
+    Map.put(apu, :memory, Memory.write(memory, addr &&& @apu_mask, value))
   end
 end

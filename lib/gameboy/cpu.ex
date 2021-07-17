@@ -4,17 +4,23 @@ defmodule Gameboy.Cpu do
   alias Gameboy.Hardware
   alias Gameboy.Utils
 
-  defmodule RegisterFile do
-    defstruct af: 0x0000,
-              bc: 0x0000,
-              de: 0x0000,
-              hl: 0x0000,
-              pc: 0x0000,
-              sp: 0x0000
+  # defmodule RegisterFile do
+  #   defstruct af: 0x0000,
+  #             bc: 0x0000,
+  #             de: 0x0000,
+  #             hl: 0x0000,
+  #             pc: 0x0000,
+  #             sp: 0x0000
 
-  end
+  # end
 
-  defstruct regs: struct(RegisterFile),
+  defstruct af: 0x0000,
+            bc: 0x0000,
+            de: 0x0000,
+            hl: 0x0000,
+            pc: 0x0000,
+            sp: 0x0000,
+            # regs: struct(RegisterFile),
             opcode: 0x0,
             ime: false,
             delayed_set_ime: nil, 
@@ -22,8 +28,7 @@ defmodule Gameboy.Cpu do
 
   defimpl Inspect, for: Cpu do
     def inspect(cpu, _) do
-      regs = cpu.regs
-      "pc: #{Utils.to_hex(regs.pc)} op: #{Utils.to_hex(cpu.opcode)} sp: #{Utils.to_hex(regs.sp)} af: #{Utils.to_hex(regs.af)} bc: #{Utils.to_hex(regs.bc)} de: #{Utils.to_hex(regs.de)} hl: #{Utils.to_hex(regs.hl)}"
+      "pc: #{Utils.to_hex(cpu.pc)} op: #{Utils.to_hex(cpu.opcode)} sp: #{Utils.to_hex(cpu.sp)} af: #{Utils.to_hex(cpu.af)} bc: #{Utils.to_hex(cpu.bc)} de: #{Utils.to_hex(cpu.de)} hl: #{Utils.to_hex(cpu.hl)}"
     end
   end
 
@@ -35,7 +40,7 @@ defmodule Gameboy.Cpu do
   # Fetch opcode for instruction and increment pc
   def fetch_next(%Cpu{} = cpu, hw, addr) do
     {opcode, hw} = Hardware.synced_read(hw, addr)
-    {write_register(Map.put(cpu, :opcode opcode), :pc, (addr + 1) &&& 0xffff), hw}
+    {write_register(Map.put(cpu, :opcode, opcode), :pc, (addr + 1) &&& 0xffff), hw}
   end
 
   # handle interrupt
@@ -46,66 +51,66 @@ defmodule Gameboy.Cpu do
 
 
   # 16-bit reads from a register
-  def read_register(%Cpu{} = cpu, :af), do: cpu.regs.af
-  def read_register(%Cpu{} = cpu, :bc), do: cpu.regs.bc
-  def read_register(%Cpu{} = cpu, :de), do: cpu.regs.de
-  def read_register(%Cpu{} = cpu, :hl), do: cpu.regs.hl
-  def read_register(%Cpu{} = cpu, :pc), do: cpu.regs.pc
-  def read_register(%Cpu{} = cpu, :sp), do: cpu.regs.sp
+  def read_register(%Cpu{} = cpu, :af), do: cpu.af
+  def read_register(%Cpu{} = cpu, :bc), do: cpu.bc
+  def read_register(%Cpu{} = cpu, :de), do: cpu.de
+  def read_register(%Cpu{} = cpu, :hl), do: cpu.hl
+  def read_register(%Cpu{} = cpu, :pc), do: cpu.pc
+  def read_register(%Cpu{} = cpu, :sp), do: cpu.sp
 
 
   # 8 bit reads from a register
-  def read_register(%Cpu{} = cpu, :a), do: (cpu.regs.af >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :f), do: cpu.regs.af &&& 0xff
-  def read_register(%Cpu{} = cpu, :b), do: (cpu.regs.bc >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :c), do: cpu.regs.bc &&& 0xff
-  def read_register(%Cpu{} = cpu, :d), do: (cpu.regs.de >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :e), do: cpu.regs.de &&& 0xff
-  def read_register(%Cpu{} = cpu, :h), do: (cpu.regs.hl >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :l), do: cpu.regs.hl &&& 0xff
+  def read_register(%Cpu{} = cpu, :a), do: (cpu.af >>> 8) &&& 0xff
+  def read_register(%Cpu{} = cpu, :f), do: cpu.af &&& 0xff
+  def read_register(%Cpu{} = cpu, :b), do: (cpu.bc >>> 8) &&& 0xff
+  def read_register(%Cpu{} = cpu, :c), do: cpu.bc &&& 0xff
+  def read_register(%Cpu{} = cpu, :d), do: (cpu.de >>> 8) &&& 0xff
+  def read_register(%Cpu{} = cpu, :e), do: cpu.de &&& 0xff
+  def read_register(%Cpu{} = cpu, :h), do: (cpu.hl >>> 8) &&& 0xff
+  def read_register(%Cpu{} = cpu, :l), do: cpu.hl &&& 0xff
 
 
   # 16-bit writes to a register
-  def write_register(%Cpu{} = cpu, :af, data), do: put_in(cpu.regs.af, data)
-  def write_register(%Cpu{} = cpu, :bc, data), do: put_in(cpu.regs.bc, data)
-  def write_register(%Cpu{} = cpu, :de, data), do: put_in(cpu.regs.de, data)
-  def write_register(%Cpu{} = cpu, :hl, data), do: put_in(cpu.regs.hl, data)
-  def write_register(%Cpu{} = cpu, :pc, data), do: put_in(cpu.regs.pc, data)
-  def write_register(%Cpu{} = cpu, :sp, data), do: put_in(cpu.regs.sp, data)
+  def write_register(%Cpu{} = cpu, :af, data), do: Map.put(cpu, :af, data)
+  def write_register(%Cpu{} = cpu, :bc, data), do: Map.put(cpu, :bc, data)
+  def write_register(%Cpu{} = cpu, :de, data), do: Map.put(cpu, :de, data)
+  def write_register(%Cpu{} = cpu, :hl, data), do: Map.put(cpu, :hl, data)
+  def write_register(%Cpu{} = cpu, :pc, data), do: Map.put(cpu, :pc, data)
+  def write_register(%Cpu{} = cpu, :sp, data), do: Map.put(cpu, :sp, data)
 
 
   # 8-bit writes to a register
   def write_register(%Cpu{} = cpu, :a, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.regs.af &&& 0x00ff)
-    put_in(cpu.regs.af, value)
+    value = ((data <<< 8) &&& 0xff00) ||| (cpu.af &&& 0x00ff)
+    Map.put(cpu, :af, value)
   end
   def write_register(%Cpu{} = cpu, :f, data) do
-    value = (cpu.regs.af &&& 0xff00) ||| (data &&& 0x00ff)
-    put_in(cpu.regs.af, value)
+    value = (cpu.af &&& 0xff00) ||| (data &&& 0x00ff)
+    Map.put(cpu, :af, value)
   end
   def write_register(%Cpu{} = cpu, :b, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.regs.bc &&& 0x00ff)
-    put_in(cpu.regs.bc, value)
+    value = ((data <<< 8) &&& 0xff00) ||| (cpu.bc &&& 0x00ff)
+    Map.put(cpu, :bc, value)
   end
   def write_register(%Cpu{} = cpu, :c, data) do
-    value = (cpu.regs.bc &&& 0xff00) ||| (data &&& 0x00ff)
-    put_in(cpu.regs.bc, value)
+    value = (cpu.bc &&& 0xff00) ||| (data &&& 0x00ff)
+    Map.put(cpu, :bc, value)
   end
   def write_register(%Cpu{} = cpu, :d, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.regs.de &&& 0x00ff)
-    put_in(cpu.regs.de, value)
+    value = ((data <<< 8) &&& 0xff00) ||| (cpu.de &&& 0x00ff)
+    Map.put(cpu, :de, value)
   end
   def write_register(%Cpu{} = cpu, :e, data) do
-    value = (cpu.regs.de &&& 0xff00) ||| (data &&& 0x00ff)
-    put_in(cpu.regs.de, value)
+    value = (cpu.de &&& 0xff00) ||| (data &&& 0x00ff)
+    Map.put(cpu, :de, value)
   end
   def write_register(%Cpu{} = cpu, :h, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.regs.hl &&& 0x00ff)
-    put_in(cpu.regs.hl, value)
+    value = ((data <<< 8) &&& 0xff00) ||| (cpu.hl &&& 0x00ff)
+    Map.put(cpu, :hl, value)
   end
   def write_register(%Cpu{} = cpu, :l, data) do
-    value = (cpu.regs.hl &&& 0xff00) ||| (data &&& 0x00ff)
-    put_in(cpu.regs.hl, value)
+    value = (cpu.hl &&& 0xff00) ||| (data &&& 0x00ff)
+    Map.put(cpu, :hl, value)
   end
 
   # Set/Get flags
@@ -113,22 +118,22 @@ defmodule Gameboy.Cpu do
     true_val = 1 <<< offset
     false_val = bxor(0xff, true_val)
     def set_flag(%Cpu{} = cpu, unquote(which_flag), true) do
-      a = cpu.regs.af &&& 0xff00
-      f = cpu.regs.af &&& 0x00ff
+      a = cpu.af &&& 0xff00
+      f = cpu.af &&& 0x00ff
       f = f ||| unquote(true_val)
-      put_in(cpu.regs.af, a ||| f)
+      Map.put(cpu, :af, a ||| f)
     end
 
     def set_flag(%Cpu{} = cpu, unquote(which_flag), false) do
-      a = cpu.regs.af &&& 0xff00
-      f = cpu.regs.af &&& 0x00ff
+      a = cpu.af &&& 0xff00
+      f = cpu.af &&& 0x00ff
       f = f &&& unquote(false_val)
-      put_in(cpu.regs.af, a ||| f)
+      Map.put(cpu, :af, a ||| f)
     end
 
     def flag(%Cpu{} = cpu, unquote(which_flag) = fl) do
       # IO.puts("flag: #{fl}, true_val: #{unquote(true_val)}")
-      (cpu.regs.af &&& unquote(true_val)) != 0
+      (cpu.af &&& unquote(true_val)) != 0
     end
   end
 
@@ -254,7 +259,7 @@ defmodule Gameboy.Cpu do
 
   # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
   def fetch_imm8(%Cpu{} = cpu, hw) do
-    addr = cpu.regs.pc
+    addr = cpu.pc
     {value, hw} = Hardware.synced_read(hw, addr)
     {value, write_register(cpu, :pc, (addr + 1) &&& 0xffff), hw}
   end

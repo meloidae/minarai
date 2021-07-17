@@ -20,11 +20,11 @@ defmodule Gameboy.Wram do
   end
 
   def write_low(%Wram{memory: memory} = wram, addr, value) do
-    put_in(wram.memory, Memory.write(memory, addr &&& @wram_mask, value))
+    Map.put(wram, :memory, Memory.write(memory, addr &&& @wram_mask, value))
   end
 
   def write_high(%Wram{memory: memory, offset: offset} = wram, addr, value) do
-    put_in(wram.memory, Memory.write(memory, offset ||| (addr &&& @wram_mask), value))
+    Map.put(wram, :memory, Memory.write(memory, offset ||| (addr &&& @wram_mask), value))
   end
 
 end

@@ -6,6 +6,7 @@ use Mix.Config
 config :minarai, :viewport, %{
   name: :main_viewport,
   size: {320, 288},
+  # size: {160, 144},
   default_scene: {Minarai.Scene.Info, nil},
   drivers: [
     %{

@@ -6,6 +6,13 @@ defmodule Gameboy.Utils do
   end
 
   def break_point(%{cpu: cpu} = gb, target_pc \\ 0x001c) do
-    cpu.regs.pc >= target_pc
+    cpu.pc == target_pc
+  end
+
+  def measure(function) do
+    function
+    |> :timer.tc
+    |> elem(0)
+    |> Kernel./(1_000_000)
   end
 end

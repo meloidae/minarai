@@ -15,7 +15,7 @@ defmodule Gameboy.Hram do
   def read(%Hram{memory: memory} = hram, addr), do: Memory.read(memory, addr &&& @hram_mask)
 
   def write(%Hram{memory: memory} = hram, addr, value) do
-    put_in(hram.memory, Memory.write(memory, addr &&& @hram_mask, value))
+    Map.put(hram, :memory, Memory.write(memory, addr &&& @hram_mask, value))
   end
 
 
