@@ -14,10 +14,14 @@ defmodule Gameboy.Cpu do
 
   # end
 
-  defstruct af: 0x0000,
-            bc: 0x0000,
-            de: 0x0000,
-            hl: 0x0000,
+  defstruct a: 0x00,
+            f: 0x00,
+            b: 0x00,
+            c: 0x00,
+            d: 0x00,
+            e: 0x00,
+            h: 0x00,
+            l: 0x00,
             pc: 0x0000,
             sp: 0x0000,
             # regs: struct(RegisterFile),
@@ -28,7 +32,7 @@ defmodule Gameboy.Cpu do
 
   defimpl Inspect, for: Cpu do
     def inspect(cpu, _) do
-      "pc: #{Utils.to_hex(cpu.pc)} op: #{Utils.to_hex(cpu.opcode)} sp: #{Utils.to_hex(cpu.sp)} af: #{Utils.to_hex(cpu.af)} bc: #{Utils.to_hex(cpu.bc)} de: #{Utils.to_hex(cpu.de)} hl: #{Utils.to_hex(cpu.hl)}"
+      "pc: #{Utils.to_hex(cpu.pc)} op: #{Utils.to_hex(cpu.opcode)} sp: #{Utils.to_hex(cpu.sp)} af: #{Utils.to_hex(Cpu.read_register(cpu, :af))} bc: #{Utils.to_hex(Cpu.read_register(cpu, :bc))} de: #{Utils.to_hex(Cpu.read_register(cpu, :de))} hl: #{Utils.to_hex(Cpu.read_register(cpu, :hl))}"
     end
   end
 
@@ -51,89 +55,61 @@ defmodule Gameboy.Cpu do
 
 
   # 16-bit reads from a register
-  def read_register(%Cpu{} = cpu, :af), do: cpu.af
-  def read_register(%Cpu{} = cpu, :bc), do: cpu.bc
-  def read_register(%Cpu{} = cpu, :de), do: cpu.de
-  def read_register(%Cpu{} = cpu, :hl), do: cpu.hl
+  def read_register(%Cpu{} = cpu, :af), do: (cpu.a <<< 8) ||| cpu.f
+  def read_register(%Cpu{} = cpu, :bc), do: (cpu.b <<< 8) ||| cpu.c
+  def read_register(%Cpu{} = cpu, :de), do: (cpu.d <<< 8) ||| cpu.e
+  def read_register(%Cpu{} = cpu, :hl), do: (cpu.h <<< 8) ||| cpu.l
   def read_register(%Cpu{} = cpu, :pc), do: cpu.pc
   def read_register(%Cpu{} = cpu, :sp), do: cpu.sp
 
 
   # 8 bit reads from a register
-  def read_register(%Cpu{} = cpu, :a), do: (cpu.af >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :f), do: cpu.af &&& 0xff
-  def read_register(%Cpu{} = cpu, :b), do: (cpu.bc >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :c), do: cpu.bc &&& 0xff
-  def read_register(%Cpu{} = cpu, :d), do: (cpu.de >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :e), do: cpu.de &&& 0xff
-  def read_register(%Cpu{} = cpu, :h), do: (cpu.hl >>> 8) &&& 0xff
-  def read_register(%Cpu{} = cpu, :l), do: cpu.hl &&& 0xff
+  def read_register(%Cpu{} = cpu, :a), do: cpu.a
+  def read_register(%Cpu{} = cpu, :f), do: cpu.f
+  def read_register(%Cpu{} = cpu, :b), do: cpu.b
+  def read_register(%Cpu{} = cpu, :c), do: cpu.c
+  def read_register(%Cpu{} = cpu, :d), do: cpu.d
+  def read_register(%Cpu{} = cpu, :e), do: cpu.e
+  def read_register(%Cpu{} = cpu, :h), do: cpu.h
+  def read_register(%Cpu{} = cpu, :l), do: cpu.l
 
 
   # 16-bit writes to a register
-  def write_register(%Cpu{} = cpu, :af, data), do: Map.put(cpu, :af, data)
-  def write_register(%Cpu{} = cpu, :bc, data), do: Map.put(cpu, :bc, data)
-  def write_register(%Cpu{} = cpu, :de, data), do: Map.put(cpu, :de, data)
-  def write_register(%Cpu{} = cpu, :hl, data), do: Map.put(cpu, :hl, data)
+  def write_register(%Cpu{} = cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
   def write_register(%Cpu{} = cpu, :pc, data), do: Map.put(cpu, :pc, data)
   def write_register(%Cpu{} = cpu, :sp, data), do: Map.put(cpu, :sp, data)
 
 
   # 8-bit writes to a register
-  def write_register(%Cpu{} = cpu, :a, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.af &&& 0x00ff)
-    Map.put(cpu, :af, value)
-  end
-  def write_register(%Cpu{} = cpu, :f, data) do
-    value = (cpu.af &&& 0xff00) ||| (data &&& 0x00ff)
-    Map.put(cpu, :af, value)
-  end
-  def write_register(%Cpu{} = cpu, :b, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.bc &&& 0x00ff)
-    Map.put(cpu, :bc, value)
-  end
-  def write_register(%Cpu{} = cpu, :c, data) do
-    value = (cpu.bc &&& 0xff00) ||| (data &&& 0x00ff)
-    Map.put(cpu, :bc, value)
-  end
-  def write_register(%Cpu{} = cpu, :d, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.de &&& 0x00ff)
-    Map.put(cpu, :de, value)
-  end
-  def write_register(%Cpu{} = cpu, :e, data) do
-    value = (cpu.de &&& 0xff00) ||| (data &&& 0x00ff)
-    Map.put(cpu, :de, value)
-  end
-  def write_register(%Cpu{} = cpu, :h, data) do
-    value = ((data <<< 8) &&& 0xff00) ||| (cpu.hl &&& 0x00ff)
-    Map.put(cpu, :hl, value)
-  end
-  def write_register(%Cpu{} = cpu, :l, data) do
-    value = (cpu.hl &&& 0xff00) ||| (data &&& 0x00ff)
-    Map.put(cpu, :hl, value)
-  end
+  def write_register(%Cpu{} = cpu, :a, data), do: Map.put(cpu, :a, data)
+  def write_register(%Cpu{} = cpu, :f, data), do: Map.put(cpu, :f, data)
+  def write_register(%Cpu{} = cpu, :b, data), do: Map.put(cpu, :b, data)
+  def write_register(%Cpu{} = cpu, :c, data), do: Map.put(cpu, :c, data)
+  def write_register(%Cpu{} = cpu, :d, data), do: Map.put(cpu, :d, data)
+  def write_register(%Cpu{} = cpu, :e, data), do: Map.put(cpu, :e, data)
+  def write_register(%Cpu{} = cpu, :h, data), do: Map.put(cpu, :h, data)
+  def write_register(%Cpu{} = cpu, :l, data), do: Map.put(cpu, :l, data)
 
   # Set/Get flags
   for {which_flag, offset} <- List.zip([[:z, :n, :h, :c], Enum.to_list(7..4)]) do
     true_val = 1 <<< offset
     false_val = bxor(0xff, true_val)
     def set_flag(%Cpu{} = cpu, unquote(which_flag), true) do
-      a = cpu.af &&& 0xff00
-      f = cpu.af &&& 0x00ff
-      f = f ||| unquote(true_val)
-      Map.put(cpu, :af, a ||| f)
+      f = cpu.f ||| unquote(true_val)
+      Map.put(cpu, :f, f)
     end
 
     def set_flag(%Cpu{} = cpu, unquote(which_flag), false) do
-      a = cpu.af &&& 0xff00
-      f = cpu.af &&& 0x00ff
-      f = f &&& unquote(false_val)
-      Map.put(cpu, :af, a ||| f)
+      f = cpu.f &&& unquote(false_val)
+      Map.put(cpu, :f, f)
     end
 
     def flag(%Cpu{} = cpu, unquote(which_flag) = fl) do
       # IO.puts("flag: #{fl}, true_val: #{unquote(true_val)}")
-      (cpu.af &&& unquote(true_val)) != 0
+      (cpu.f &&& unquote(true_val)) != 0
     end
   end
 

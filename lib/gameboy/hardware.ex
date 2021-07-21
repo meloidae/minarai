@@ -253,12 +253,12 @@ defmodule Gameboy.Hardware do
     # timer
   end
 
-  def machine_cycle(_, %Hardware{ppu: ppu, counter: counter} = hw, _) do
+  def machine_cycle(_, %Hardware{ppu: ppu} = hw, _) do
     # oam
     # ppu
     ppu = Ppu.cycle(ppu)
     # timer
-    %{hw | ppu: ppu, counter: counter + 4}
+    %{hw | ppu: ppu}
   end
 
 end

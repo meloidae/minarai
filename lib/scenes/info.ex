@@ -1,5 +1,4 @@
 defmodule Minarai.Scene.Info do
-  import ExProf.Macro
   use Scenic.Scene
   alias Scenic.Graph
   alias Scenic.ViewPort
@@ -34,8 +33,6 @@ defmodule Minarai.Scene.Info do
               # translate: {0, 0},
               id: :gameboy
             )
-            # |> text("", id: :fps, translate: {20 * @pixel_size, 70 * @pixel_size})
-
 
     gb = Gameboy.init()
 
@@ -47,13 +44,25 @@ defmodule Minarai.Scene.Info do
       screen: screen
     }
 
-    # send(self(), :step)
-    results = run_profile(gb, 70224)
-    # output = Utils.measure(fn -> Process.sleep(1000) end)
-    # output = Utils.measure(fn -> run_loop(gb, 70224) end)
-    # IO.puts("#{output}")
+    send(self(), :step)
+    # results = run_profile(gb, 70224)
+    # IO.puts("#{Utils.measure(fn -> run_loop(gb, 70224) end)}")
 
     {:ok, state, push: graph}
+  end
+
+  def render_from_array(screen, screen_buffer) do
+    buffer_len = @screen_width * @screen_height
+    Stream.zip(0..buffer_len - 1, screen_buffer)
+    |> Enum.reduce(screen, fn {i, pixel}, sc -> 
+      y = div(i, @screen_width) * @pixel_size
+      x = rem(i, @screen_width) * @pixel_size
+      for i <- 0..@pixel_size - 1,
+          j <- 0..@pixel_size - 1,
+          reduce: sc do
+        acc -> Texture.put!(acc, x + i, y + j, pixel)
+      end
+    end)
   end
 
   def render_from_map(screen, screen_buffer) do
@@ -69,23 +78,26 @@ defmodule Minarai.Scene.Info do
         end)
   end
 
+  def render_from_list(screen, screen_buffer) do
+    buffer_len = @screen_width * @screen_height
+    Stream.zip(buffer_len - 1..0, screen_buffer)
+    |> Enum.reduce(screen, fn {i, pixel}, sc ->
+      y = div(i, @screen_width) * @pixel_size
+      x = rem(i, @screen_width) * @pixel_size
+      for j <- 0..@pixel_size - 1,
+          k <- 0..@pixel_size - 1,
+          reduce: sc do
+          acc -> Texture.put!(acc, x + j, y + k, pixel)
+      end
+    end)
+  end
+
   def handle_info(:frame, %{gb: gb, screen: screen} = state) do
     gb = put_in(gb.hw.counter, 0)
     screen_buffer = Ppu.screen_buffer(gb.hw.ppu)
-    buffer_len = @screen_width * @screen_height
-    # new_screen = Stream.zip(buffer_len - 1..0, screen_buffer)
-    # new_screen = Stream.zip(0..buffer_len - 1, screen_buffer)
-    #              |> Enum.reduce(screen, fn {i, pixel}, sc -> 
-    #                y = div(i, @screen_width) * @pixel_size
-    #                x = rem(i, @screen_width) * @pixel_size
-    #                for i <- 0..@pixel_size - 1,
-    #                    j <- 0..@pixel_size - 1,
-    #                    reduce: sc do
-    #                  acc -> Texture.put!(acc, x + i, y + j, pixel)
-    #                end
-    #              end)
-    # new_screen = render(screen_buffer, screen, 0, [{0, 0}, {0, 1}, {1, 0}, {1, 1}])
+    # new_screen = render_from_list(screen, screen_buffer)
     new_screen = render_from_map(screen, screen_buffer)
+    # new_screen = render_from_array(screen, screen_buffer)
     Cache.put("screen", new_screen)
     gb = put_in(gb.hw.ppu, Ppu.flush_screen_buffer(gb.hw.ppu))
     send(self(), :step)
@@ -95,19 +107,9 @@ defmodule Minarai.Scene.Info do
   def handle_info(:put_frame, %{gb: gb, screen: screen} = state) do
     IO.puts("Put frame")
     screen_buffer = Ppu.screen_buffer(gb.hw.ppu)
-    buffer_len = @screen_width * @screen_height
-    # new_screen = Stream.zip(buffer_len - 1..0, screen_buffer)
-    # new_screen = Stream.zip(0..buffer_len - 1, screen_buffer)
-    #              |> Enum.reduce(screen, fn {i, pixel}, sc -> 
-    #                y = div(i, @screen_width) * @pixel_size
-    #                x = rem(i, @screen_width) * @pixel_size
-    #                for i <- 0..@pixel_size - 1,
-    #                    j <- 0..@pixel_size - 1,
-    #                    reduce: sc do
-    #                  acc -> Texture.put!(acc, x + i, y + j, pixel)
-    #                end
-    #              end)
+    # new_screen = render_from_list(screen, screen_buffer)
     new_screen = render_from_map(screen, screen_buffer)
+    # new_screen = render_from_array(screen, screen_buffer)
     Cache.put("screen", new_screen)
     gb = put_in(gb.hw.ppu, Ppu.flush_screen_buffer(gb.hw.ppu))
     {:noreply, %{state | gb: gb, screen: new_screen}}
@@ -183,20 +185,4 @@ defmodule Minarai.Scene.Info do
 
   def run_loop(gb, 0), do: gb
   def run_loop(gb, n), do: run_loop(Gameboy.step(gb), n - 1)
-
-  def run_profile(gb, num_repeat) do
-    {records, results} = do_analyze(gb, num_repeat)
-    total_percent = Enum.reduce(records, 0.0, &(&1.percent + &2))
-    IO.inspect "total = #{total_percent}"
-    results
-  end
-
-  def do_analyze(gb, num_repeat) do
-    profile do
-      for i <- 0..num_repeat - 1, reduce: gb do
-        gb -> Gameboy.step(gb)
-      end
-    end
-  end
-
 end

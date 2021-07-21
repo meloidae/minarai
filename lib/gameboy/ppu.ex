@@ -2,6 +2,7 @@ defmodule Gameboy.Ppu do
   use Bitwise
   alias Gameboy.Memory
   alias Gameboy.Ppu
+  alias Gameboy.Utils.Fifo
 
   defmodule Gameboy.Ppu.Fetcher do
     alias Gameboy.Ppu.Fetcher
@@ -22,7 +23,7 @@ defmodule Gameboy.Ppu do
       %Fetcher{fifo: fifo}
     end
 
-    def start(fetcher, map_addr, tile_line) do
+    def start(%Fetcher{fifo: fifo} = fetcher, map_addr, tile_line) do
       # Reset fifo
       fifo = :queue.new()
       %{fetcher | mode: :read_tile_id, fifo: fifo, fifo_size: 0, tile_index: 0, map_addr: map_addr, tile_line: tile_line}
@@ -57,8 +58,16 @@ defmodule Gameboy.Ppu do
     def enable(screen), do: Map.put(screen, :enabled, true)
 
     # Screen buffer using list
-    # def write(%Screen{buffer: buffer} = screen, value), do: Map.put(screen, :buffer, [value | buffer])
-    # def vblank(screen), do: Map.put(screen, :ready, true)
+    # def write(%Screen{buffer: buffer} = screen, value) do
+    #   Map.put(screen, :buffer, [value | buffer])
+    # end
+    # def vblank(screen) do
+    #   Map.put(screen, :ready, true)
+    # end
+    # def flush(%Screen{} = screen) do
+    #   %{screen | ready: false, buffer: []}
+    # end
+
 
     # Screen buffer using array
     # def write(%Screen{index: index, buffer: buffer} = screen, value) do
@@ -70,7 +79,11 @@ defmodule Gameboy.Ppu do
     def write(%Screen{index: index, buffer: buffer} = screen, value) do
       %{screen | index: index + 1, buffer: Map.put(buffer, index, value)}
     end
-    def vblank(%Screen{index: index} = screen), do: %{screen | index: 0, ready: true}
+    def vblank(%Screen{index: index} = screen) do
+      # IO.puts("Vblank")
+      %{screen | index: 0, ready: true}
+    end
+    def flush(%Screen{} = screen), do: Map.put(screen, :ready, false)
   end
 
   defmodule Gameboy.Ppu.LcdcRegiser do
@@ -160,7 +173,6 @@ defmodule Gameboy.Ppu do
     addr = base_addr + (tile_line * 2)
 
     data = read_vram(ppu, addr, :bin)
-    # Enum.map(7..0, fn i -> (data >>> i) &&& 0x1 end)
     parse_tile_byte(data)
   end
 
@@ -170,7 +182,6 @@ defmodule Gameboy.Ppu do
     addr = base_addr + (tile_line * 2)
 
     data = read_vram(ppu, addr + 1, :bin)
-    # Enum.map(7..0, fn i -> (data >>> i) &&& 0x1 end)
     parse_tile_byte(data)
   end
 
@@ -244,7 +255,7 @@ defmodule Gameboy.Ppu do
     end
   end
 
-  defp do_t_cycle(%Ppu{counter: counter, mode: mode, screen: screen} = ppu) do
+  defp do_t_cycle(%Ppu{counter: counter, mode: mode} = ppu) do
     new_counter = counter + 1
     case mode do
       :oam_search -> # Mode 2
@@ -301,7 +312,7 @@ defmodule Gameboy.Ppu do
         screen = Screen.vblank(screen)
         %{ppu | mode: :vblank, counter: 0, ly: new_ly, screen: screen}
       else
-        %{ppu | mode: :oam_search, counter: 0, ly: new_ly}
+        %{ppu | mode: :oam_search, counter: 0, ly: new_ly, screen: screen}
       end
     else
       Map.put(ppu, :counter, counter)
@@ -324,16 +335,17 @@ defmodule Gameboy.Ppu do
   def screen_buffer_ready(ppu), do: ppu.screen.ready
 
   # Screen buffer using list
-  # def screen_buffer(ppu), do: Stream.map(ppu.screen.buffer, fn p -> color(p) end)
-  # def flush_screen_buffer(ppu) do
-  #   Map.put(ppu, :screen, Screen.init())
+  # def screen_buffer(ppu) do 
+  #   Stream.map(ppu.screen.buffer, fn p -> color(p) end)
+  # end
+  # def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
+  #   Map.put(ppu, :screen, Screen.flush(screen))
   # end
 
   # Screen buffer using array
   # def screen_buffer(%Ppu{screen: screen} = ppu) do
   #   :array.to_list(screen.buffer)
   #   |> Stream.map(fn p -> color(p) end)
-  #   # |> Enum.map(fn p -> color(p) end)
   # end
 
   # Screen buffer using map
