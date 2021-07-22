@@ -5,14 +5,15 @@ use Mix.Config
 # Configure the main viewport for the Scenic application
 config :minarai, :viewport, %{
   name: :main_viewport,
-  size: {320, 288},
+  size: {160 * 4, 144 * 4},
+  # size: {320, 288},
   # size: {160, 144},
   default_scene: {Minarai.Scene.Info, nil},
   drivers: [
     %{
       module: Scenic.Driver.Glfw,
       name: :glfw,
-      opts: [resizeable: false, title: "minarai"]
+      opts: [resizeable: true, title: "minarai"]
     }
   ]
 }

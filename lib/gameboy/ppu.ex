@@ -47,10 +47,16 @@ defmodule Gameboy.Ppu do
       # Buffer using list
       # buffer = []
       # Buffer using map
-      buffer = 0..@screen_width * @screen_height - 1
-               |> Enum.reduce(%{}, fn i, m -> Map.put(m, i, 0) end)
+      buffer = <<>>
+      # buffer = 0..@screen_width * @screen_height - 1
+      #          |> Enum.reduce(%{}, fn i, m -> Map.put(m, i, 0) end)
       %Screen{buffer: buffer, ready: false}
     end
+
+    def color(0b11), do: <<15, 65, 15>>
+    def color(0b10), do: <<48, 98, 48>>
+    def color(0b01), do: <<139, 172, 15>>
+    def color(0b00), do: <<155, 188, 15>>
 
     # Disable
     def disable(screen), do: Map.put(screen, :enabled, false)
@@ -76,14 +82,24 @@ defmodule Gameboy.Ppu do
     # def vblank(%Screen{index: index} = screen), do: %{screen | index: 0, ready: true}
 
     # Screen buffer using map
-    def write(%Screen{index: index, buffer: buffer} = screen, value) do
-      %{screen | index: index + 1, buffer: Map.put(buffer, index, value)}
+    # def write(%Screen{index: index, buffer: buffer} = screen, value) do
+    #   %{screen | index: index + 1, buffer: Map.put(buffer, index, value)}
+    # end
+    # def vblank(%Screen{index: index} = screen) do
+    #   # IO.puts("Vblank")
+    #   %{screen | index: 0, ready: true}
+    # end
+    # def flush(%Screen{} = screen), do: Map.put(screen, :ready, false)
+
+    # Screen buffer using binary
+    def write(%Screen{buffer: buffer} = screen, value) do
+      Map.put(screen, :buffer, buffer <> color(value))
     end
-    def vblank(%Screen{index: index} = screen) do
-      # IO.puts("Vblank")
-      %{screen | index: 0, ready: true}
+    def vblank(screen), do: Map.put(screen, :ready, true)
+    def flush(screen) do
+      %{screen | ready: false, buffer: <<>>}
     end
-    def flush(%Screen{} = screen), do: Map.put(screen, :ready, false)
+
   end
 
   defmodule Gameboy.Ppu.LcdcRegiser do
@@ -187,45 +203,65 @@ defmodule Gameboy.Ppu do
 
   defp push_to_fifo([], [], fifo), do: fifo
   defp push_to_fifo([high | high_rest], [low | low_rest], fifo) do
-    push_to_fifo(high_rest, low_rest, :queue.in({high, low}, fifo))
+    push_to_fifo(high_rest, low_rest, :queue.in((high <<< 1) ||| low, fifo))
   end
 
-  def fetcher_cycle(%Ppu{vram: vram} = ppu, %Fetcher{mode: mode} = fetcher) do
-    # new_counter = counter + 1
-    # if new_counter < 2 do
-    #   Map.put(fetcher, :counter, new_counter)
-    # else
-    case mode do
-      :read_tile_id ->
-        tile_id = read_vram(ppu, fetcher.map_addr + fetcher.tile_index)
-        # %{fetcher | mode: :read_tile_data_low, tile_id: tile_id, counter: 0}
-        %{fetcher | mode: :read_tile_data_low, tile_id: tile_id}
-      :read_tile_data_low ->
-        pixel_data = read_tile_line(:low, ppu, fetcher)
-        # %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data, counter: 0}
-        %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data}
-      :read_tile_data_high ->
-        pixel_data = read_tile_line(:high, ppu, fetcher)
-        # %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data, counter: 0}
-        %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
-      :push_fifo ->
-        if fetcher.fifo_size <= 8 do
-          # Push pixels to the queue if there are <= 8 pixels in the queue
-          new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
-          # Move to next tile (tile_index++)
-          %{fetcher | mode: :read_tile_id,
-                      fifo: new_fifo,
-                      fifo_size: fetcher.fifo_size + 8,
-                      tile_index: fetcher.tile_index + 1
-                      # counter: 0
-          }
-        else
-          # Map.put(fetcher, :counter, 0)
-          fetcher
-        end
-    end
-    # end
+  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_id} = fetcher) do
+    tile_id = read_vram(ppu, fetcher.map_addr + fetcher.tile_index)
+    %{fetcher | mode: :read_tile_data_low, tile_id: tile_id}
   end
+
+  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_data_low} = fetcher) do
+    pixel_data = read_tile_line(:low, ppu, fetcher)
+    %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data}
+  end
+
+  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_data_high} = fetcher) do
+    pixel_data = read_tile_line(:high, ppu, fetcher)
+    %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
+  end
+
+  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :push_fifo} = fetcher) do
+    if fetcher.fifo_size <= 8 do
+      # Push pixels to the queue if there are <= 8 pixels in the queue
+      new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
+      # Move to next tile (tile_index++)
+      %{fetcher | mode: :read_tile_id,
+                  fifo: new_fifo,
+                  fifo_size: fetcher.fifo_size + 8,
+                  tile_index: fetcher.tile_index + 1
+      }
+    else
+      fetcher
+    end
+  end
+
+  # def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: mode} = fetcher) do
+  #   case mode do
+  #     :read_tile_id ->
+  #       tile_id = read_vram(ppu, fetcher.map_addr + fetcher.tile_index)
+  #       %{fetcher | mode: :read_tile_data_low, tile_id: tile_id}
+  #     :read_tile_data_low ->
+  #       pixel_data = read_tile_line(:low, ppu, fetcher)
+  #       %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data}
+  #     :read_tile_data_high ->
+  #       pixel_data = read_tile_line(:high, ppu, fetcher)
+  #       %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
+  #     :push_fifo ->
+  #       if fetcher.fifo_size <= 8 do
+  #         # Push pixels to the queue if there are <= 8 pixels in the queue
+  #         new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
+  #         # Move to next tile (tile_index++)
+  #         %{fetcher | mode: :read_tile_id,
+  #                     fifo: new_fifo,
+  #                     fifo_size: fetcher.fifo_size + 8,
+  #                     tile_index: fetcher.tile_index + 1
+  #         }
+  #       else
+  #         fetcher
+  #       end
+  #   end
+  # end
 
   def fetcher_pop(%Fetcher{fifo: fifo, fifo_size: fifo_size} = fetcher) do
     {{:value, value}, new_fifo} = :queue.out(fifo)
@@ -290,9 +326,9 @@ defmodule Gameboy.Ppu do
       %{ppu | counter: counter, fetcher: new_fetcher}
     else
       # Pop pixel from fifo and print it to screen
-      {{pixel_h, pixel_l}, new_fetcher} = fetcher_pop(new_fetcher)
+      {pixel, new_fetcher} = fetcher_pop(new_fetcher)
       # Put pixel to screen
-      palette_color = (ppu.bgp >>> (((pixel_h <<< 1) ||| (pixel_l)) * 2)) &&& 0x3
+      palette_color = (ppu.bgp >>> (pixel * 2)) &&& 0x3
       screen = Screen.write(screen, palette_color)
       new_x = x + 1
       # Do scanline stuff
@@ -309,10 +345,9 @@ defmodule Gameboy.Ppu do
     if counter == 456 do
       new_ly = ly + 1
       if new_ly == 144 do
-        screen = Screen.vblank(screen)
-        %{ppu | mode: :vblank, counter: 0, ly: new_ly, screen: screen}
+        %{ppu | mode: :vblank, counter: 0, ly: new_ly, screen: Screen.vblank(screen)}
       else
-        %{ppu | mode: :oam_search, counter: 0, ly: new_ly, screen: screen}
+        %{ppu | mode: :oam_search, counter: 0, ly: new_ly}
       end
     else
       Map.put(ppu, :counter, counter)
@@ -349,19 +384,26 @@ defmodule Gameboy.Ppu do
   # end
 
   # Screen buffer using map
-  def screen_buffer(%Ppu{screen: screen} = ppu) do
-    screen.buffer
-    |> Stream.map(fn {i, p} -> {i, color(p)} end)
+  # def screen_buffer(%Ppu{screen: screen} = ppu) do
+  #   screen.buffer
+  #   |> Stream.map(fn {i, p} -> {i, color(p)} end)
+  # end
+  # def flush_screen_buffer(ppu), do: put_in(ppu.screen.ready, false)
+
+  # Screen buffer using binary
+  def screen_buffer(%Ppu{screen: screen} = ppu), do: screen.buffer
+  def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
+    Map.put(ppu, :screen, Screen.flush(screen))
   end
-  def flush_screen_buffer(ppu), do: put_in(ppu.screen.ready, false)
 
   # def color({1, 1}), do: {15, 65, 15}
   # def color({1, 0}), do: {48, 98, 48}
   # def color({0, 1}), do: {139, 172, 15}
   # def color({0, 0}), do: {155, 188, 15}
-  def color(0b11), do: {15, 65, 15}
-  def color(0b10), do: {48, 98, 48}
-  def color(0b01), do: {139, 172, 15}
-  def color(0b00), do: {155, 188, 15}
+  # def color(0b11), do: {15, 65, 15}
+  # def color(0b10), do: {48, 98, 48}
+  # def color(0b01), do: {139, 172, 15}
+  # def color(0b00), do: {155, 188, 15}
+
 
 end

@@ -20,9 +20,11 @@ defmodule Gameboy.Memory do
     value
   end
 
-  def read(%Memory{data: data} = memory, addr, _), do: read(memory, addr)
+  def read(%Memory{data: data} = memory, addr, _), do: :binary.at(data, addr)
 
   def read(%Memory{data: data} = memory, addr), do: :binary.at(data, addr)
+
+
   # def read(%Memory{data: data} = memory, addr), do: :binary.decode_unsigned(binary_part(data, addr, 1))
 
 

@@ -10,9 +10,8 @@ defmodule Gameboy.Utils do
   end
 
   def measure(function) do
-    function
-    |> :timer.tc
-    |> elem(0)
-    |> Kernel./(1_000_000)
+    {t, v} = function
+             |> :timer.tc
+    {t |> Kernel./(1_000_000), v}
   end
 end

@@ -12,7 +12,7 @@ defmodule Minarai.Scene.Info do
   # Constants
   @graph Graph.build(font: :roboto, font_size: 24)
   @frame_ms 192
-  @pixel_size 2
+  @pixel_size 4
   @screen_width 160
   @screen_height 144
   
@@ -21,16 +21,18 @@ defmodule Minarai.Scene.Info do
   def init(_arg, opts) do
     viewport = opts[:viewport]
 
-    screen = Texture.build!(:rgb, 160 * @pixel_size, 144 * @pixel_size, clear: {155, 188, 15})
+    screen = Texture.build!(:rgb, 160, 144, clear: {155, 188, 15})
     Cache.put("screen", screen)
 
     # Start timer
     # {:ok, timer} = :timer.send_interval(@frame_ms, :frame)
 
     graph = @graph
-            |> rect({160 * @pixel_size, 144 * @pixel_size},
+            |> rect({160, 144},
               fill: {:dynamic, "screen"},
-              # translate: {0, 0},
+              scale: @pixel_size,
+              pin: {0, 0},
+              # translate: {160 * @pixel_size, 144 * @pixel_size},
               id: :gameboy
             )
 
@@ -41,15 +43,40 @@ defmodule Minarai.Scene.Info do
       graph: graph,
       gb: gb,
       # frame_timer: timer,
-      screen: screen
+      # screen: screen
+      prev_time: nil,
     }
 
     send(self(), :step)
+    # buffer = 1..@screen_width * @screen_height
+    #          |> Enum.reduce(<<>>, fn _, b -> b <> <<0, 0, 0>> end)
+    # {time, _} = Utils.measure(fn -> Cache.put("screen", {:rgb, @screen_width, @screen_height, buffer, []}) end)
+    # IO.puts("Took #{time} seconds to place texture from binary")
+    # buffer = 0..@screen_width * @screen_height - 1
+    #          |> Enum.reduce(%{}, fn i, m -> Map.put(m, i, 0) end)
+    #          |> Enum.map(fn {i, p} -> {i, color(p)} end)
+    # {time, screen} = Utils.measure(fn -> render_from_map(screen, buffer) end)
+    # IO.puts("Took #{time} seconds to consruct texture")
     # results = run_profile(gb, 70224)
-    # IO.puts("#{Utils.measure(fn -> run_loop(gb, 70224) end)}")
+    # steps = 1
+    # {time, gb} = Utils.measure(fn -> run_loop(gb, steps) end)
+    # IO.puts("Took #{time} seconds to complete #{steps} steps")
+    # IO.puts("counter = #{gb.hw.counter}")
+    # {time, gb} = Utils.measure(fn -> run_frame(gb) end)
+    # IO.puts("Took #{time} seconds to complete a frame (70224 cycles)")
+    # IO.puts("counter = #{gb.hw.counter}")
+    # cycle = 70224 * 9
+    # {time, gb} = Utils.measure(fn -> run_cycle(gb, cycle) end)
+    # IO.puts("Took #{time} seconds to complete #{cycle} cycles")
+    # IO.puts("counter = #{gb.hw.counter}")
 
     {:ok, state, push: graph}
   end
+
+  # def color(0b11), do: {15, 65, 15}
+  # def color(0b10), do: {48, 98, 48}
+  # def color(0b01), do: {139, 172, 15}
+  # def color(0b00), do: {155, 188, 15}
 
   def render_from_array(screen, screen_buffer) do
     buffer_len = @screen_width * @screen_height
@@ -68,13 +95,9 @@ defmodule Minarai.Scene.Info do
   def render_from_map(screen, screen_buffer) do
     screen_buffer
     |> Enum.reduce(screen, fn {i, pixel}, sc ->
-          y = div(i, @screen_width) * @pixel_size
-          x = rem(i, @screen_width) * @pixel_size
-          for i <- 0..@pixel_size - 1,
-              j <- 0..@pixel_size - 1,
-              reduce: sc do
-            acc -> Texture.put!(acc, x + i, y + j, pixel)
-          end
+          y = div(i, @screen_width)
+          x = rem(i, @screen_width)
+          Texture.put!(sc, x, y, pixel)
         end)
   end
 
@@ -92,27 +115,46 @@ defmodule Minarai.Scene.Info do
     end)
   end
 
-  def handle_info(:frame, %{gb: gb, screen: screen} = state) do
+  def handle_info(:frame, %{gb: gb} = state) do
     gb = put_in(gb.hw.counter, 0)
     screen_buffer = Ppu.screen_buffer(gb.hw.ppu)
     # new_screen = render_from_list(screen, screen_buffer)
-    new_screen = render_from_map(screen, screen_buffer)
+    # new_screen = render_from_map(screen, screen_buffer)
     # new_screen = render_from_array(screen, screen_buffer)
-    Cache.put("screen", new_screen)
+    # Cache.put("screen", new_screen)
+    Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
     gb = put_in(gb.hw.ppu, Ppu.flush_screen_buffer(gb.hw.ppu))
+    {graph, prev_time} = if !is_nil(state.prev_time) do
+      curr_time = System.monotonic_time()
+      diff = System.convert_time_unit(curr_time - state.prev_time, :native, :millisecond)
+      fps = 1_000 / diff
+      {state.graph |> text("#{Float.round(fps, 2)}", fill: :white, translate: {48, 48}), curr_time}
+    else
+      {state.graph, System.monotonic_time()}
+    end
     send(self(), :step)
-    {:noreply, %{state | gb: gb, screen: new_screen}}
+    {:noreply, %{state | gb: gb, prev_time: prev_time}, push: graph}
   end
 
-  def handle_info(:put_frame, %{gb: gb, screen: screen} = state) do
+  def handle_info(:put_frame, %{gb: gb} = state) do
     IO.puts("Put frame")
     screen_buffer = Ppu.screen_buffer(gb.hw.ppu)
     # new_screen = render_from_list(screen, screen_buffer)
-    new_screen = render_from_map(screen, screen_buffer)
+    # new_screen = render_from_map(screen, screen_buffer)
     # new_screen = render_from_array(screen, screen_buffer)
-    Cache.put("screen", new_screen)
+    # Cache.put("screen", new_screen)
+    Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
     gb = put_in(gb.hw.ppu, Ppu.flush_screen_buffer(gb.hw.ppu))
-    {:noreply, %{state | gb: gb, screen: new_screen}}
+    {graph, prev_time} = if !is_nil(state.prev_time) do
+      curr_time = System.monotonic_time()
+      diff = System.convert_time_unit(curr_time - state.prev_time, :native, :millisecond)
+      fps = 1_000 / diff
+      {state.graph |> text("#{Float.round(fps)}", fill: :white, translate: {48, 48}), curr_time}
+    else
+      {state.graph, System.monotonic_time()}
+    end
+
+    {:noreply, %{state | gb: gb, prev_time: prev_time}, push: graph}
   end
 
   def handle_info(:step, state) do
@@ -185,4 +227,10 @@ defmodule Minarai.Scene.Info do
 
   def run_loop(gb, 0), do: gb
   def run_loop(gb, n), do: run_loop(Gameboy.step(gb), n - 1)
+
+  def run_frame(gb) when gb.hw.counter < 70224, do: run_frame(Gameboy.step(gb))
+  def run_frame(gb), do: gb
+
+  def run_cycle(gb, n) when gb.hw.counter < n, do: run_cycle(Gameboy.step(gb), n)
+  def run_cycle(gb, _), do: gb
 end

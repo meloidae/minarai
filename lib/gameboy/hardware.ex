@@ -258,7 +258,7 @@ defmodule Gameboy.Hardware do
     # ppu
     ppu = Ppu.cycle(ppu)
     # timer
-    %{hw | ppu: ppu}
+    %{hw | ppu: ppu, counter: hw.counter + 4}
   end
 
 end
