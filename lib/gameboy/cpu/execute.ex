@@ -142,10 +142,12 @@ defmodule Gameboy.Cpu.Execute do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = Cpu.sub_u8_byte_carry(val1, val2)
-    cpu = Cpu.set_flag(cpu, :z, diff == 0)
-    |> Cpu.set_flag(:n, true)
-    |> Cpu.set_flag(:h, half_carry)
-    |> Cpu.set_flag(:c, carry)
+    # cpu = Cpu.set_flag(cpu, :z, diff == 0)
+    # |> Cpu.set_flag(:n, true)
+    # |> Cpu.set_flag(:h, half_carry)
+    # |> Cpu.set_flag(:c, carry)
+    cpu = Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}, {:c, carry}])
+    # IO.puts("cp")
     {cpu, hw}
   end
 
@@ -179,10 +181,12 @@ defmodule Gameboy.Cpu.Execute do
     hl = Cpu.read_register(cpu, :hl)
     val = Cpu.read_register(cpu, reg16)
     {sum, carry, half_carry} = Cpu.add_u16_word_carry(hl, val)
+    # cpu = Cpu.write_register(cpu, :hl, sum)
+    #       |> Cpu.set_flag(:n, false)
+    #       |> Cpu.set_flag(:h, half_carry)
+    #       |> Cpu.set_flag(:c, carry)
     cpu = Cpu.write_register(cpu, :hl, sum)
-          |> Cpu.set_flag(:n, false)
-          |> Cpu.set_flag(:h, half_carry)
-          |> Cpu.set_flag(:c, carry)
+          |> Cpu.set_flags([{:n, false}, {:h, half_carry}, {:c, carry}])
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
   end
 
@@ -334,10 +338,12 @@ defmodule Gameboy.Cpu.Execute do
   def _shift(%Cpu{} = cpu, hw, dst, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {value, carry} = shift_fn.(value, cpu)
-    Cpu.set_flag(cpu, :z, value == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
-    |> Cpu.set_flag(:c, carry)
+    # Cpu.set_flag(cpu, :z, value == 0)
+    # |> Cpu.set_flag(:n, false)
+    # |> Cpu.set_flag(:h, false)
+    # |> Cpu.set_flag(:c, carry)
+    # |> Cpu.write(dst, hw, value)
+    Cpu.set_flags(cpu, [{:z, value == 0}, {:n, false}, {:h, false}, {:c, carry}])
     |> Cpu.write(dst, hw, value)
   end
   # RLC dd

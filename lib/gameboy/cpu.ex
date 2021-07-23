@@ -94,7 +94,7 @@ defmodule Gameboy.Cpu do
   def write_register(%Cpu{} = cpu, :l, data), do: Map.put(cpu, :l, data)
 
   # Set/Get flags
-  for {which_flag, offset} <- List.zip([[:z, :n, :h, :c], Enum.to_list(7..4)]) do
+  for {which_flag, offset} <- Enum.zip([:z, :n, :h, :c], 7..4) do
     true_val = 1 <<< offset
     false_val = bxor(0xff, true_val)
     def set_flag(%Cpu{} = cpu, unquote(which_flag), true) do
@@ -107,11 +107,51 @@ defmodule Gameboy.Cpu do
       Map.put(cpu, :f, f)
     end
 
-    def flag(%Cpu{} = cpu, unquote(which_flag) = fl) do
-      # IO.puts("flag: #{fl}, true_val: #{unquote(true_val)}")
-      (cpu.f &&& unquote(true_val)) != 0
-    end
+    # def flag(%Cpu{} = cpu, unquote(which_flag)) do
+    #   (cpu.f &&& unquote(true_val)) != 0
+    # end
   end
+
+
+  def set_flags(%Cpu{} = cpu, flags) do
+    f = compute_flags(flags, cpu.f)
+    Map.put(cpu, :f, f)
+  end
+  def compute_flags([], value), do: value
+  def compute_flags([{:z, true} | t], value) do
+    compute_flags(t, value ||| 0x80)
+  end
+  def compute_flags([{:z, false} | t], value) do
+    compute_flags(t, value &&& 0x7f)
+  end
+  def compute_flags([{:n, true} | t], value) do
+    compute_flags(t, value ||| 0x40)
+  end
+  def compute_flags([{:n, false} | t], value) do
+    compute_flags(t, value &&& 0xbf)
+  end
+  def compute_flags([{:h, true} | t], value) do
+    compute_flags(t, value ||| 0x20)
+  end
+  def compute_flags([{:h, false} | t], value) do
+    compute_flags(t, value &&& 0xdf)
+  end
+  def compute_flags([{:c, true} | t], value) do
+    compute_flags(t, value ||| 0x10)
+  end
+  def compute_flags([{:c, false} | t], value) do
+    compute_flags(t, value &&& 0xef)
+  end
+
+
+  @z_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
+  def flag(%Cpu{} = cpu, :z), do: elem(@z_table, cpu.f)
+  @n_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end) |> List.to_tuple()
+  def flag(%Cpu{} = cpu, :n), do: elem(@n_table, cpu.f)
+  @h_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
+  def flag(%Cpu{} = cpu, :h), do: elem(@h_table, cpu.f)
+  @c_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end) |> List.to_tuple()
+  def flag(%Cpu{} = cpu, :c), do: elem(@c_table, cpu.f)
 
   # Check flag based on condition code
   def check_condition(%Cpu{} = cpu, :nz), do: !flag(cpu, :z)

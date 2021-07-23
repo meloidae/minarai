@@ -7,8 +7,7 @@ defmodule Gameboy.Ppu do
   defmodule Gameboy.Ppu.Fetcher do
     alias Gameboy.Ppu.Fetcher
     alias Gameboy.Ppu
-    defstruct counter: 0,
-              mode: :read_tile_id,
+    defstruct mode: :read_tile_id,
               fifo: nil,
               fifo_size: 0,
               tile_id: 0,
@@ -41,45 +40,31 @@ defmodule Gameboy.Ppu do
               enabled: false,
               ready: false
 
+    @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
+    @empty_buffer 1..@screen_width * @screen_height
+                  |> Enum.reduce([], fn _, acc -> [acc | elem(@color, 0)] end)
     def init do
-      # Buffer using array
-      # buffer = :array.new([size: @screen_width * @screen_height, fixed: true, default: 0])
-      # Buffer using list
-      # buffer = []
       # Buffer using map
-      buffer = <<>>
       # buffer = 0..@screen_width * @screen_height - 1
       #          |> Enum.reduce(%{}, fn i, m -> Map.put(m, i, 0) end)
+      # Buffer using binary
+      # buffer = <<>>
+      # Buffer using iolist
+      buffer = []
+      # Buffer for testing no ppu loop situation
+      # buffer = @empty_buffer
       %Screen{buffer: buffer, ready: false}
     end
 
-    def color(0b11), do: <<15, 65, 15>>
-    def color(0b10), do: <<48, 98, 48>>
-    def color(0b01), do: <<139, 172, 15>>
-    def color(0b00), do: <<155, 188, 15>>
+    # def color(0b11), do: <<15, 65, 15>>
+    # def color(0b10), do: <<48, 98, 48>>
+    # def color(0b01), do: <<139, 172, 15>>
+    # def color(0b00), do: <<155, 188, 15>>
 
     # Disable
     def disable(screen), do: Map.put(screen, :enabled, false)
     # Enable
     def enable(screen), do: Map.put(screen, :enabled, true)
-
-    # Screen buffer using list
-    # def write(%Screen{buffer: buffer} = screen, value) do
-    #   Map.put(screen, :buffer, [value | buffer])
-    # end
-    # def vblank(screen) do
-    #   Map.put(screen, :ready, true)
-    # end
-    # def flush(%Screen{} = screen) do
-    #   %{screen | ready: false, buffer: []}
-    # end
-
-
-    # Screen buffer using array
-    # def write(%Screen{index: index, buffer: buffer} = screen, value) do
-    #   %{screen | index: index + 1, buffer: :array.set(index, value, buffer)}
-    # end
-    # def vblank(%Screen{index: index} = screen), do: %{screen | index: 0, ready: true}
 
     # Screen buffer using map
     # def write(%Screen{index: index, buffer: buffer} = screen, value) do
@@ -92,12 +77,24 @@ defmodule Gameboy.Ppu do
     # def flush(%Screen{} = screen), do: Map.put(screen, :ready, false)
 
     # Screen buffer using binary
+    # def write(%Screen{buffer: buffer} = screen, value) do
+    #   Map.put(screen, :buffer, buffer <> elem(@color, value))
+    #   # Map.put(screen, :buffer, buffer <> color(value))
+    # end
+    # def vblank(screen), do: Map.put(screen, :ready, true)
+    # def flush(screen) do
+    #   %{screen | ready: false, buffer: <<>>}
+    # end
+
+    # Screen buffer usin iolist
     def write(%Screen{buffer: buffer} = screen, value) do
-      Map.put(screen, :buffer, buffer <> color(value))
+      Map.put(screen, :buffer, [buffer | elem(@color, value)])
+      # Map.put(screen, :buffer, buffer <> color(value))
     end
     def vblank(screen), do: Map.put(screen, :ready, true)
     def flush(screen) do
-      %{screen | ready: false, buffer: <<>>}
+      # Screen.init()
+      %{screen | ready: false, buffer: []}
     end
 
   end
@@ -270,9 +267,9 @@ defmodule Gameboy.Ppu do
 
   def cycle(ppu), do: do_cycle(ppu, 4)
 
-  defp do_cycle(ppu, 0), do: ppu
+  def do_cycle(ppu, 0), do: ppu
 
-  defp do_cycle(ppu, n) do
+  def do_cycle(ppu, n) do
     do_cycle(t_cycle(ppu), n - 1)
   end
 
@@ -369,20 +366,6 @@ defmodule Gameboy.Ppu do
 
   def screen_buffer_ready(ppu), do: ppu.screen.ready
 
-  # Screen buffer using list
-  # def screen_buffer(ppu) do 
-  #   Stream.map(ppu.screen.buffer, fn p -> color(p) end)
-  # end
-  # def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
-  #   Map.put(ppu, :screen, Screen.flush(screen))
-  # end
-
-  # Screen buffer using array
-  # def screen_buffer(%Ppu{screen: screen} = ppu) do
-  #   :array.to_list(screen.buffer)
-  #   |> Stream.map(fn p -> color(p) end)
-  # end
-
   # Screen buffer using map
   # def screen_buffer(%Ppu{screen: screen} = ppu) do
   #   screen.buffer
@@ -391,7 +374,13 @@ defmodule Gameboy.Ppu do
   # def flush_screen_buffer(ppu), do: put_in(ppu.screen.ready, false)
 
   # Screen buffer using binary
-  def screen_buffer(%Ppu{screen: screen} = ppu), do: screen.buffer
+  # def screen_buffer(%Ppu{screen: screen} = ppu), do: screen.buffer
+  # def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
+  #   Map.put(ppu, :screen, Screen.flush(screen))
+  # end
+
+  # Screen buffer using iolist
+  def screen_buffer(%Ppu{screen: screen} = ppu), do: screen.buffer |> IO.iodata_to_binary()
   def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
     Map.put(ppu, :screen, Screen.flush(screen))
   end

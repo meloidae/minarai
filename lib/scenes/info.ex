@@ -78,20 +78,6 @@ defmodule Minarai.Scene.Info do
   # def color(0b01), do: {139, 172, 15}
   # def color(0b00), do: {155, 188, 15}
 
-  def render_from_array(screen, screen_buffer) do
-    buffer_len = @screen_width * @screen_height
-    Stream.zip(0..buffer_len - 1, screen_buffer)
-    |> Enum.reduce(screen, fn {i, pixel}, sc -> 
-      y = div(i, @screen_width) * @pixel_size
-      x = rem(i, @screen_width) * @pixel_size
-      for i <- 0..@pixel_size - 1,
-          j <- 0..@pixel_size - 1,
-          reduce: sc do
-        acc -> Texture.put!(acc, x + i, y + j, pixel)
-      end
-    end)
-  end
-
   def render_from_map(screen, screen_buffer) do
     screen_buffer
     |> Enum.reduce(screen, fn {i, pixel}, sc ->
@@ -99,20 +85,6 @@ defmodule Minarai.Scene.Info do
           x = rem(i, @screen_width)
           Texture.put!(sc, x, y, pixel)
         end)
-  end
-
-  def render_from_list(screen, screen_buffer) do
-    buffer_len = @screen_width * @screen_height
-    Stream.zip(buffer_len - 1..0, screen_buffer)
-    |> Enum.reduce(screen, fn {i, pixel}, sc ->
-      y = div(i, @screen_width) * @pixel_size
-      x = rem(i, @screen_width) * @pixel_size
-      for j <- 0..@pixel_size - 1,
-          k <- 0..@pixel_size - 1,
-          reduce: sc do
-          acc -> Texture.put!(acc, x + j, y + k, pixel)
-      end
-    end)
   end
 
   def handle_info(:frame, %{gb: gb} = state) do
@@ -166,16 +138,18 @@ defmodule Minarai.Scene.Info do
       else
         send(self(), :step)
       end
-      # send(self(), :step)
     else
       # send(self(), :put_frame)
       send(self(), :render)
     end
+    # For testing with no ppu
+    # if gb.hw.counter >= 70224 do
+    #   send(self(), :frame)
+    # else
+    #   send(self(), :step)
+    # end
     {:noreply, Map.put(state, :gb, gb)}
   end
-
-  def ppu_loop(ppu) when ppu.screen.ready, do: ppu
-  def ppu_loop(ppu), do: ppu_loop(Ppu.cycle(ppu))
 
   def handle_info(:render, state) do
     gb = state.gb
@@ -195,12 +169,6 @@ defmodule Minarai.Scene.Info do
     {:noreply, Map.put(state, :gb, gb)}
   end
 
-  # Single step
-  # def handle_input({:key, {"enter", :press, _}}, _context, state) do
-  #   gb = Gameboy.step(state.gb)
-  #   {:noreply, Map.put(state, :gb, gb)}
-  # end
-  
   def handle_info(:single_step, state) do
     gb = Gameboy.step(state.gb)
     {:noreply, Map.put(state, :gb, gb)}
@@ -233,4 +201,8 @@ defmodule Minarai.Scene.Info do
 
   def run_cycle(gb, n) when gb.hw.counter < n, do: run_cycle(Gameboy.step(gb), n)
   def run_cycle(gb, _), do: gb
+
+  def ppu_loop(ppu) when ppu.screen.ready, do: ppu
+  def ppu_loop(ppu), do: ppu_loop(Ppu.cycle(ppu))
+
 end

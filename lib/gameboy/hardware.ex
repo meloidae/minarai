@@ -131,10 +131,10 @@ defmodule Gameboy.Hardware do
         raise "Read from ppu window y at #{Utils.to_hex(addr)} is unimplemented"
       0x4b ->
         raise "Read from ppu window x at #{Utils.to_hex(addr)} is unimplemented"
-      x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
       0xff ->
         machine_cycle(:memory, hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
+      x when 0x80 <= x and x <= 0xfe ->
+        machine_cycle(:memory, hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
       x when 0x10 <= x and x <= 0x26 ->
         machine_cycle(:memory, hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
       x when 0x30 <= x and x <= 0x3f ->
@@ -229,10 +229,10 @@ defmodule Gameboy.Hardware do
         raise "Write to ppu window y at #{Utils.to_hex(addr)} is unimplemented"
       0x4b ->
         raise "Write to ppu window x at #{Utils.to_hex(addr)} is unimplemented"
-      x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
       0xff ->
         raise "Write to interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
+      x when 0x80 <= x and x <= 0xfe ->
+        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
       x when 0x10 <= x and x <= 0x26 ->
         machine_cycle(:memory, hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
       x when 0x30 <= x and x <= 0x3f ->
