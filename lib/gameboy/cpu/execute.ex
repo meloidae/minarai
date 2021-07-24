@@ -433,6 +433,11 @@ defmodule Gameboy.Cpu.Execute do
       {cpu, hw}
     end
   end
+
+  @signed_table 0..255 |> Enum.map(fn x ->
+    msb = x &&& 0x80
+    if msb != 0, do: x ||| 0xff00, else: x
+  end) |> List.to_tuple()
   # JR n
   # 12 cycles
   # Add i8 immediate value to current pc and jump
@@ -454,8 +459,9 @@ defmodule Gameboy.Cpu.Execute do
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
     addr = Cpu.read_register(cpu, :pc)
     if Cpu.check_condition(cpu, cc) do
-      msb = offset &&& 0x80
-      offset = if msb != 0, do: offset ||| 0xff00, else: offset
+      # msb = offset &&& 0x80
+      # offset = if msb != 0, do: offset ||| 0xff00, else: offset
+      offset = elem(@signed_table, offset)
       cpu = Cpu.write_register(cpu, :pc, (addr + offset) &&& 0xffff)
       {cpu, Hardware.sync_cycle(hw)} # 4 extra cycles
     else

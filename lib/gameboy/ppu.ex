@@ -148,13 +148,13 @@ defmodule Gameboy.Ppu do
     %Ppu{vram: vram, oam: oam, counter: @oam_search_cycles, fetcher: fetcher, screen: screen}
   end
 
-  def read_vram(%Ppu{vram: vram} = ppu, addr, opt \\ nil), do: Memory.read(vram, addr &&& @vram_mask, opt)
+  def read_vram(%Ppu{vram: vram} = _ppu, addr, opt \\ nil), do: Memory.read(vram, addr &&& @vram_mask, opt)
 
   def write_vram(%Ppu{vram: vram} = ppu, addr, value) do
     Map.put(ppu, :vram, Memory.write(vram, addr &&& @vram_mask, value))
   end
 
-  def lcd_control(%Ppu{lcdc: lcdc} = ppu), do: lcdc.value
+  def lcd_control(%Ppu{lcdc: lcdc} = _ppu), do: lcdc.value
 
   def set_lcd_control(%Ppu{} = ppu, value), do: Map.put(ppu, :lcdc, LcdcRegiser.init(value &&& 0xff))
 
@@ -180,7 +180,7 @@ defmodule Gameboy.Ppu do
     [b0, b1, b2, b3, b4, b5, b6, b7]
   end
 
-  def read_tile_line(:low, ppu, %Fetcher{tile_id: tile_id, tile_line: tile_line} = fetcher) do
+  def read_tile_line(:low, ppu, %Fetcher{tile_id: tile_id, tile_line: tile_line}) do
     # Tile's data takes 16 bytes
     base_addr = 0x8000 + (tile_id * 16)
     addr = base_addr + (tile_line * 2)
@@ -189,7 +189,7 @@ defmodule Gameboy.Ppu do
     parse_tile_byte(data)
   end
 
-  def read_tile_line(:high, ppu, %Fetcher{tile_id: tile_id, tile_line: tile_line} = fetcher) do
+  def read_tile_line(:high, ppu, %Fetcher{tile_id: tile_id, tile_line: tile_line}) do
     # Tile's data takes 16 bytes
     base_addr = 0x8000 + (tile_id * 16)
     addr = base_addr + (tile_line * 2)
@@ -218,7 +218,7 @@ defmodule Gameboy.Ppu do
     %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
   end
 
-  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :push_fifo} = fetcher) do
+  def fetcher_cycle(%Ppu{} = _ppu, %Fetcher{mode: :push_fifo} = fetcher) do
     if fetcher.fifo_size <= 8 do
       # Push pixels to the queue if there are <= 8 pixels in the queue
       new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
@@ -266,6 +266,9 @@ defmodule Gameboy.Ppu do
   end
 
   def cycle(ppu), do: do_cycle(ppu, 4)
+  # def cycle(ppu) do
+  #   ppu |> t_cycle() |> t_cycle() |> t_cycle() |> t_cycle()
+  # end
 
   def do_cycle(ppu, 0), do: ppu
 
@@ -274,16 +277,16 @@ defmodule Gameboy.Ppu do
   end
 
   # Do one T-cycle (not M-Cycle)
-  defp t_cycle(%Ppu{screen: screen, lcdc: lcdc} = ppu) do
-    case {screen.enabled, lcdc.display_enable} do
+  defp t_cycle(%Ppu{} = ppu) do
+    case {ppu.lcdc.display_enable, ppu.screen.enabled} do
       {true, true} -> # Display is already enabled & display is on
         do_t_cycle(ppu)
-      {true, false} -> # Disable display & reset ppu states
-        %{ppu | ly: 0, x: 0, screen: Screen.disable(screen)}
-      {false, true} -> # Enable display & run ppu cycle
-        ppu = %{ppu | mode: :oam_search, screen: Screen.enable(screen)}
+      {true, _} -> # Enable display & run ppu cycle
+        ppu = %{ppu | mode: :oam_search, screen: Screen.enable(ppu.screen)}
         do_t_cycle(ppu)
-      {false, false} -> # Do nothing
+      {false, true} -> # Disable display & reset ppu states
+        %{ppu | ly: 0, x: 0, screen: Screen.disable(ppu.screen)}
+      _ -> # Do nothing
         ppu
     end
   end
@@ -304,7 +307,7 @@ defmodule Gameboy.Ppu do
 
   defp cycle_oam_search(%Ppu{scy: scy, ly: ly, fetcher: fetcher} = ppu, counter) do
     # Scanning OAM takes 40 cycles
-    if counter == 40 do
+    if counter == 80 do
       # Set up pixel fetcher
       y = scy + ly
       tile_line = rem(y, 8)
@@ -337,12 +340,14 @@ defmodule Gameboy.Ppu do
     end
   end
 
-  def cycle_hblank(%Ppu{ly: ly, screen: screen} = ppu, counter) do
+  def cycle_hblank(%Ppu{ly: ly} = ppu, counter) do
     # Full scanline takes 456 cycles
     if counter == 456 do
       new_ly = ly + 1
       if new_ly == 144 do
-        %{ppu | mode: :vblank, counter: 0, ly: new_ly, screen: Screen.vblank(screen)}
+        # %{ppu | mode: :vblank, counter: 0, ly: new_ly, screen: Screen.vblank(screen)}
+        # Delay vblank timing
+        %{ppu | mode: :vblank, counter: 0, ly: new_ly}
       else
         %{ppu | mode: :oam_search, counter: 0, ly: new_ly}
       end
@@ -351,11 +356,13 @@ defmodule Gameboy.Ppu do
     end
   end
 
-  def cycle_vblank(%Ppu{ly: ly} = ppu, counter) do
+  def cycle_vblank(%Ppu{ly: ly, screen: screen} = ppu, counter) do
     if counter == 456 do
       new_ly = ly + 1
       if new_ly == 153 do
-        %{ppu | mode: :oam_search, counter: 0, ly: 0}
+        # %{ppu | mode: :oam_search, counter: 0, ly: 0}
+        # Delay vblank timing
+        %{ppu | mode: :oam_search, counter: 0, ly: 0, screen: Screen.vblank(screen)}
       else
         %{ppu | counter: 0, ly: new_ly}
       end
@@ -380,7 +387,7 @@ defmodule Gameboy.Ppu do
   # end
 
   # Screen buffer using iolist
-  def screen_buffer(%Ppu{screen: screen} = ppu), do: screen.buffer |> IO.iodata_to_binary()
+  def screen_buffer(%Ppu{screen: screen} = _ppu), do: screen.buffer |> IO.iodata_to_binary()
   def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
     Map.put(ppu, :screen, Screen.flush(screen))
   end

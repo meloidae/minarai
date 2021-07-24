@@ -243,17 +243,17 @@ defmodule Gameboy.Hardware do
   end
 
   def machine_cycle(:memory, hw, memory_fn) do
-    hw = machine_cycle(nil, hw, nil)
+    hw = machine_cycle(hw)
     memory_fn.(hw)
   end
 
-  defp machine_cycle(:timer, hw) do
+  defp machine_cycle(:timer, _hw) do
     # oam
     # ppu
     # timer
   end
 
-  def machine_cycle(_, %Hardware{ppu: ppu} = hw, _) do
+  def machine_cycle(%Hardware{ppu: ppu} = hw) do
     # oam
     # ppu
     ppu = Ppu.cycle(ppu)
