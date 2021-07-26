@@ -47,7 +47,7 @@ defmodule Minarai.Scene.Info do
       prev_time: nil,
     }
 
-    # send(self(), :step)
+    send(self(), :step)
     # buffer = 1..@screen_width * @screen_height
     #          |> Enum.reduce(<<>>, fn _, b -> b <> <<0, 0, 0>> end)
     # {time, _} = Utils.measure(fn -> Cache.put("screen", {:rgb, @screen_width, @screen_height, buffer, []}) end)
