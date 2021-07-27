@@ -1,6 +1,7 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
   alias Gameboy.Cpu
+  alias Gameboy.Ppu
   import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   import Gameboy.Cpu.Decode, only: [decode_exec: 2]
 
@@ -29,5 +30,22 @@ defmodule Gameboy do
         {cpu, hw}
     end
     %{gb | cpu: cpu, hw: hw}
+  end
+
+  def start() do
+    gb = Gameboy.init()
+    loop(gb)
+  end
+
+  defp loop(gb) do
+    gb = Gameboy.step(gb)
+    ppu = if gb.hw.ppu.screen.ready do
+      send(Info, {:animate_frame, Ppu.screen_buffer(gb.hw.ppu)})
+      # IO.puts("Screen ready")
+      Ppu.flush_screen_buffer(gb.hw.ppu)
+    else
+      gb.hw.ppu
+    end
+    loop(put_in(gb.hw.ppu, ppu))
   end
 end

@@ -1,5 +1,5 @@
 defmodule Minarai.Scene.Info do
-  use Scenic.Scene
+  use Scenic.Scene, name: Info
   alias Scenic.Graph
   alias Scenic.ViewPort
   import Scenic.Primitives, only: [text: 3, rect: 3]
@@ -36,18 +36,20 @@ defmodule Minarai.Scene.Info do
               id: :gameboy
             )
 
-    gb = Gameboy.init()
+    # gb = Gameboy.init()
+    gb_pid = spawn_link(fn -> Gameboy.start() end)
 
     state = %{
       viewport: viewport,
       graph: graph,
-      gb: gb,
+      pid: gb_pid,
+      # gb: gb,
       # frame_timer: timer,
       # screen: screen
       prev_time: nil,
     }
 
-    send(self(), :step)
+    # send(self(), :step)
     # buffer = 1..@screen_width * @screen_height
     #          |> Enum.reduce(<<>>, fn _, b -> b <> <<0, 0, 0>> end)
     # {time, _} = Utils.measure(fn -> Cache.put("screen", {:rgb, @screen_width, @screen_height, buffer, []}) end)
@@ -73,11 +75,6 @@ defmodule Minarai.Scene.Info do
     {:ok, state, push: graph}
   end
 
-  # def color(0b11), do: {15, 65, 15}
-  # def color(0b10), do: {48, 98, 48}
-  # def color(0b01), do: {139, 172, 15}
-  # def color(0b00), do: {155, 188, 15}
-
   def render_from_map(screen, screen_buffer) do
     screen_buffer
     |> Enum.reduce(screen, fn {i, pixel}, sc ->
@@ -85,6 +82,19 @@ defmodule Minarai.Scene.Info do
           x = rem(i, @screen_width)
           Texture.put!(sc, x, y, pixel)
         end)
+  end
+
+  def handle_info({:animate_frame, screen_buffer}, state) do
+    Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
+    {graph, prev_time} = if !is_nil(state.prev_time) do
+      curr_time = System.monotonic_time()
+      diff = System.convert_time_unit(curr_time - state.prev_time, :native, :millisecond)
+      fps = 1_000 / diff
+      {state.graph |> text("#{Float.round(fps, 2)}", fill: :white, translate: {48, 48}), curr_time}
+    else
+      {state.graph, System.monotonic_time()}
+    end
+    {:noreply, %{state | prev_time: prev_time}, push: graph}
   end
 
   def handle_info(:frame, %{gb: gb} = state) do

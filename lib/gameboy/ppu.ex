@@ -26,12 +26,6 @@ defmodule Gameboy.Ppu do
       fifo = :queue.new()
       %{fetcher | mode: :read_tile_id, fifo: fifo, fifo_size: 0, tile_index: 0, map_addr: map_addr, tile_line: tile_line}
     end
-
-    # def start(%Fetcher{} = fetcher, map_addr, tile_line) do
-    #   # ets fifo
-    #   Ppu.fifo_clear()
-    #   %{fetcher | mode: :read_tile_id, fifo_size: 0, tile_index: 0, map_addr: map_addr, tile_line: tile_line}
-    # end
   end
 
   defmodule Screen do
@@ -142,14 +136,6 @@ defmodule Gameboy.Ppu do
   @hblank_cycles 51
   @vblank_cycles 114
 
-
-  # def fifo_init() do
-  #   Gameboy.Fifo.init()
-  # end
-  # def fifo_clear() do
-  #   Gameboy.Fifo.clear()
-  # end
-
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
@@ -252,33 +238,6 @@ defmodule Gameboy.Ppu do
       fetcher
     end
   end
-
-  # def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: mode} = fetcher) do
-  #   case mode do
-  #     :read_tile_id ->
-  #       tile_id = read_vram(ppu, fetcher.map_addr + fetcher.tile_index)
-  #       %{fetcher | mode: :read_tile_data_low, tile_id: tile_id}
-  #     :read_tile_data_low ->
-  #       pixel_data = read_tile_line(:low, ppu, fetcher)
-  #       %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data}
-  #     :read_tile_data_high ->
-  #       pixel_data = read_tile_line(:high, ppu, fetcher)
-  #       %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
-  #     :push_fifo ->
-  #       if fetcher.fifo_size <= 8 do
-  #         # Push pixels to the queue if there are <= 8 pixels in the queue
-  #         new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
-  #         # Move to next tile (tile_index++)
-  #         %{fetcher | mode: :read_tile_id,
-  #                     fifo: new_fifo,
-  #                     fifo_size: fetcher.fifo_size + 8,
-  #                     tile_index: fetcher.tile_index + 1
-  #         }
-  #       else
-  #         fetcher
-  #       end
-  #   end
-  # end
 
   def fetcher_pop(%Fetcher{fifo: fifo, fifo_size: fifo_size} = fetcher) do
     {{:value, value}, new_fifo} = :queue.out(fifo)
