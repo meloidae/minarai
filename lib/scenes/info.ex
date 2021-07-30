@@ -11,7 +11,6 @@ defmodule Minarai.Scene.Info do
 
   # Constants
   @graph Graph.build(font: :roboto, font_size: 24)
-  @frame_ms 192
   @pixel_size 4
   @screen_width 160
   @screen_height 144
@@ -37,12 +36,12 @@ defmodule Minarai.Scene.Info do
             )
 
     # gb = Gameboy.init()
-    gb_pid = spawn_link(fn -> Gameboy.start() end)
+    # gb_pid = spawn_link(fn -> Gameboy.start() end)
 
     state = %{
       viewport: viewport,
       graph: graph,
-      pid: gb_pid,
+      # pid: gb_pid,
       # gb: gb,
       # frame_timer: timer,
       # screen: screen

@@ -22,6 +22,7 @@ defmodule Gameboy.Test.Ppu do
     run_ppu_fps(ppu, n - 1, [fps | fps_info])
   end
 end
+
 gb = Gameboy.init()
 # Turn on lcd
 gb = put_in(gb.hw.ppu, Gameboy.Ppu.set_lcd_control(gb.hw.ppu, 0x91))
@@ -30,10 +31,12 @@ gb = put_in(gb.hw.ppu, Gameboy.Ppu.set_lcd_control(gb.hw.ppu, 0x91))
 # {ppu, _} = Gameboy.Test.Ppu.run_ppu_fps(gb.hw.ppu, 1, [])
 
 # Measure fps
-{ppu, fps_info} = Gameboy.Test.Ppu.run_ppu_fps(gb.hw.ppu, 120, [])
+{ppu, fps_info} = Gameboy.Test.Ppu.run_ppu_fps(gb.hw.ppu, 300, [])
 for {i, fps} <- Stream.zip(Stream.iterate(0, &(&1 + 1)), Enum.reverse(fps_info)) do
   IO.puts("#{i}: #{fps}")
 end
+avg = Enum.sum(fps_info) / length(fps_info)
+IO.puts("Avg: #{avg}")
 
 # For fprof
 # ppu = Gameboy.Test.Ppu.run_ppu_frames(gb.hw.ppu, 10)
