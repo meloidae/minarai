@@ -24,11 +24,11 @@ defmodule Gameboy.Hardware do
   def synced_read(hw, addr) do
     Hardware.read(hw, addr)
   end
-  def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 &&& addr)
+  def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 ||| addr)
   def synced_write(hw, addr, data) do
     Hardware.write(hw, addr, data)
   end
-  def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 &&& addr, data)
+  def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 ||| addr, data)
   def sync_cycle(hw) do
     hw
   end
@@ -43,6 +43,62 @@ defmodule Gameboy.Hardware do
     %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu}
   end
 
+  # defp _read(0x00, hw, addr) when hw.bootrom.active do
+  #   machine_cycle(:memory, hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
+  # end
+  # for high_addr <- 0..0xff do
+  #   cond do
+  #     high_addr <= 0x3f ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
+  #       end
+  #     high_addr <= 0x7f ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
+  #       end
+  #     high_addr <= 0x9f ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
+  #       end
+  #     high_addr <= 0xbf ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
+  #       end
+  #     high_addr <= 0xcf ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+  #       end
+  #     high_addr <= 0xdf ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+  #       end
+  #     high_addr <= 0xef ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+  #       end
+  #     high_addr <= 0xfd ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+  #       end
+  #     high_addr == 0xfe ->
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         low = addr &&& 0xff
+  #         if low <= 0x9f do
+  #           # oam
+  #           raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
+  #         else
+  #           # unusable memory
+  #           raise "Read from unusable memory at #{Utils.to_hex(addr)}"
+  #         end
+  #       end
+  #     true -> 
+  #       defp _read(unquote(high_addr), hw, addr) do
+  #         read_ff(hw, addr)
+  #       end
+  #   end
+  # end
+
+  # def read(%Hardware{} = hw, addr), do: _read((addr >>> 8) &&& 0xff, hw, addr)
 
   def read(%Hardware{} = hw, addr) do
     high = (addr >>> 8) &&& 0xff

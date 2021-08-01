@@ -41,7 +41,8 @@ defmodule Gameboy do
     gb = Gameboy.step(gb)
     ppu = if gb.hw.ppu.screen.ready do
       send(Info, {:animate_frame, Ppu.screen_buffer(gb.hw.ppu)})
-      # IO.puts("Screen ready")
+      # send(Info, :animate_frame)
+      # ScreenServer.animate(gb.hw.ppu.screen.buffer)
       Ppu.flush_screen_buffer(gb.hw.ppu)
     else
       gb.hw.ppu

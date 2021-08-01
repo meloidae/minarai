@@ -14,7 +14,7 @@ defmodule Minarai.Scene.Info do
   @pixel_size 4
   @screen_width 160
   @screen_height 144
-  
+
 
   # Initalization
   def init(_arg, opts) do
@@ -22,6 +22,7 @@ defmodule Minarai.Scene.Info do
 
     screen = Texture.build!(:rgb, 160, 144, clear: {155, 188, 15})
     Cache.put("screen", screen)
+    IO.puts(@a_value)
 
     # Start timer
     # {:ok, timer} = :timer.send_interval(@frame_ms, :frame)
@@ -29,14 +30,14 @@ defmodule Minarai.Scene.Info do
     graph = @graph
             |> rect({160, 144},
               fill: {:dynamic, "screen"},
-              scale: @pixel_size,
+              scale: -@pixel_size,
               pin: {0, 0},
-              # translate: {160 * @pixel_size, 144 * @pixel_size},
+              translate: {160 * @pixel_size, 144 * @pixel_size},
               id: :gameboy
             )
 
     # gb = Gameboy.init()
-    # gb_pid = spawn_link(fn -> Gameboy.start() end)
+    ## gb_pid = spawn_link(fn -> Gameboy.start() end)
 
     state = %{
       viewport: viewport,
@@ -84,6 +85,22 @@ defmodule Minarai.Scene.Info do
   end
 
   def handle_info({:animate_frame, screen_buffer}, state) do
+    Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
+    {graph, prev_time} = if !is_nil(state.prev_time) do
+      curr_time = System.monotonic_time()
+      diff = System.convert_time_unit(curr_time - state.prev_time, :native, :millisecond)
+      fps = 1_000 / diff
+      {state.graph |> text("#{Float.round(fps, 2)}", fill: :white, translate: {48, 48}), curr_time}
+    else
+      {state.graph, System.monotonic_time()}
+    end
+    {:noreply, %{state | prev_time: prev_time}, push: graph}
+  end
+
+  def handle_info(:animate_frame, state) do
+    screen_buffer = :ets.tab2list(:screen_table)
+                    |> Enum.map(fn x -> elem(x, 1) end)
+                    |> IO.iodata_to_binary()
     Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
     {graph, prev_time} = if !is_nil(state.prev_time) do
       curr_time = System.monotonic_time()

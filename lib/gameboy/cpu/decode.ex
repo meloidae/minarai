@@ -8,9 +8,11 @@ defmodule Gameboy.Cpu.Decode do
       nil ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         instruction(cpu.opcode, cpu, hw)
+        # elem(@instructions, cpu.opcode).(cpu, hw)
       value ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         cpu = instruction(cpu.opcode, cpu, hw)
+        # cpu = elem(@instructions, cpu.opcode).(cpu, hw)
         cpu = Map.put(cpu, :ime, value)
         {Map.put(cpu, :delayed_set_ime, nil), hw}
     end

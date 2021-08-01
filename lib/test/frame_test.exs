@@ -22,7 +22,9 @@ end
 
 gb = Gameboy.init()
 
-{gb, fps_info} = Gameboy.Test.Frame.run_frames_fps(gb, 120, [])
+{gb, fps_info} = Gameboy.Test.Frame.run_frames_fps(gb, 300, [])
 for {i, fps} <- Stream.zip(Stream.iterate(0, &(&1 + 1)), Enum.reverse(fps_info)) do
   IO.puts("#{i}: #{fps}")
 end
+avg = Enum.sum(fps_info) / length(fps_info)
+IO.puts("Avg: #{avg}")

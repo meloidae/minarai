@@ -534,4 +534,12 @@ defmodule Gameboy.Cpu.Execute do
     {cpu, Hardware.sync_cycle(hw)}
   end
 
+  def undefined(_cpu, _hw, opcode) do
+    raise "Undefined opcode: #{Utils.to_hex(opcode)}"
+  end
+
+  def cb_undefined(_cpu, _hw, opcode) do
+    raise "Undefined cb opcode: #{Utils.to_hex(opcode)}"
+  end
+
 end

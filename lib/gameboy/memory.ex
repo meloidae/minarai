@@ -15,14 +15,14 @@ defmodule Gameboy.Memory do
     if i == 0, do: mem_array, else: _init_memory_array(Map.put(mem_array, i - 1, init(block_size)), block_size, i - 1)
   end
 
-  def read(%Memory{data: data} = memory, addr, :bin) do
-    <<_first::binary-size(addr), value::binary-size(1), _rest::binary>> = data
-    value
-  end
+  # def read(%Memory{data: data} = memory, addr, :bin) do
+  #   <<_first::binary-size(addr), value::binary-size(1), _rest::binary>> = data
+  #   value
+  # end
 
-  def read(%Memory{data: data} = memory, addr, _), do: :binary.at(data, addr)
+  # def read(%Memory{data: data} = memory, addr, _), do: :binary.at(data, addr)
 
-  def read(%Memory{data: data} = memory, addr), do: :binary.at(data, addr)
+  def read(%Memory{data: data} = _memory, addr), do: :binary.at(data, addr)
 
 
   def write(%Memory{data: data} = memory, addr, value) do
