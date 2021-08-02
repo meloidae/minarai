@@ -15,7 +15,7 @@ defmodule Gameboy do
 
   def step(%{cpu: cpu, hw: hw} = gb) do
     # Handle interrupts
-    {cpu, hw} = handle_interrupt(cpu, hw)
+    # {cpu, hw} = handle_interrupt(cpu, hw)
     {cpu, hw} = case cpu.state do
       :running ->
         {cpu, hw} = fetch_next(cpu, hw, cpu.pc)

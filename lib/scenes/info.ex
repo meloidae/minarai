@@ -22,7 +22,6 @@ defmodule Minarai.Scene.Info do
 
     screen = Texture.build!(:rgb, 160, 144, clear: {155, 188, 15})
     Cache.put("screen", screen)
-    IO.puts(@a_value)
 
     # Start timer
     # {:ok, timer} = :timer.send_interval(@frame_ms, :frame)
@@ -37,40 +36,20 @@ defmodule Minarai.Scene.Info do
             )
 
     # gb = Gameboy.init()
-    ## gb_pid = spawn_link(fn -> Gameboy.start() end)
+    # gb_pid = spawn_link(fn -> Gameboy.start() end)
 
     state = %{
       viewport: viewport,
       graph: graph,
-      # pid: gb_pid,
+      # pid: spawn_link(fn -> Gameboy.start() end),
       # gb: gb,
       # frame_timer: timer,
       # screen: screen
+      # buffer: <<>>,
       prev_time: nil,
     }
 
     # send(self(), :step)
-    # buffer = 1..@screen_width * @screen_height
-    #          |> Enum.reduce(<<>>, fn _, b -> b <> <<0, 0, 0>> end)
-    # {time, _} = Utils.measure(fn -> Cache.put("screen", {:rgb, @screen_width, @screen_height, buffer, []}) end)
-    # IO.puts("Took #{time} seconds to place texture from binary")
-    # buffer = 0..@screen_width * @screen_height - 1
-    #          |> Enum.reduce(%{}, fn i, m -> Map.put(m, i, 0) end)
-    #          |> Enum.map(fn {i, p} -> {i, color(p)} end)
-    # {time, screen} = Utils.measure(fn -> render_from_map(screen, buffer) end)
-    # IO.puts("Took #{time} seconds to consruct texture")
-    # results = run_profile(gb, 70224)
-    # steps = 1
-    # {time, gb} = Utils.measure(fn -> run_loop(gb, steps) end)
-    # IO.puts("Took #{time} seconds to complete #{steps} steps")
-    # IO.puts("counter = #{gb.hw.counter}")
-    # {time, gb} = Utils.measure(fn -> run_frame(gb) end)
-    # IO.puts("Took #{time} seconds to complete a frame (70224 cycles)")
-    # IO.puts("counter = #{gb.hw.counter}")
-    # cycle = 70224 * 9
-    # {time, gb} = Utils.measure(fn -> run_cycle(gb, cycle) end)
-    # IO.puts("Took #{time} seconds to complete #{cycle} cycles")
-    # IO.puts("counter = #{gb.hw.counter}")
 
     {:ok, state, push: graph}
   end
@@ -84,6 +63,12 @@ defmodule Minarai.Scene.Info do
         end)
   end
 
+  @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
+  def handle_info({:pixel, pixel}, state) do
+    buffer = [elem(@color, pixel) | state.buffer]
+    {:noreply, Map.put(state, :buffer, buffer)}
+  end
+
   def handle_info({:animate_frame, screen_buffer}, state) do
     Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
     {graph, prev_time} = if !is_nil(state.prev_time) do
@@ -94,13 +79,11 @@ defmodule Minarai.Scene.Info do
     else
       {state.graph, System.monotonic_time()}
     end
-    {:noreply, %{state | prev_time: prev_time}, push: graph}
+    {:noreply, Map.put(state, :prev_time, prev_time), push: graph}
   end
 
   def handle_info(:animate_frame, state) do
-    screen_buffer = :ets.tab2list(:screen_table)
-                    |> Enum.map(fn x -> elem(x, 1) end)
-                    |> IO.iodata_to_binary()
+    screen_buffer = state.buffer |> IO.iodata_to_binary()
     Cache.put("screen", {:rgb, @screen_width, @screen_height, screen_buffer, []})
     {graph, prev_time} = if !is_nil(state.prev_time) do
       curr_time = System.monotonic_time()
@@ -110,7 +93,7 @@ defmodule Minarai.Scene.Info do
     else
       {state.graph, System.monotonic_time()}
     end
-    {:noreply, %{state | prev_time: prev_time}, push: graph}
+    {:noreply, %{state | prev_time: prev_time, buffer: []}, push: graph}
   end
 
   def handle_info(:frame, %{gb: gb} = state) do

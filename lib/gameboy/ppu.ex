@@ -1,7 +1,9 @@
 defmodule Gameboy.Ppu do
   use Bitwise
   alias Gameboy.Memory
+  alias Gameboy.EtsMemory
   alias Gameboy.Ppu
+  alias MinaraiNif, as: Nif
 
 
   defmodule Fetcher do
@@ -34,7 +36,7 @@ defmodule Gameboy.Ppu do
     @screen_height 144
 
     defstruct buffer: nil,
-              # index: 0,
+              index: 0,
               enabled: false,
               ready: false
 
@@ -56,13 +58,10 @@ defmodule Gameboy.Ppu do
       # %Screen{ready: false}
       # Buffer (pid)
       # {:ok, buffer} = ScreenServer.start_link()
+      # Buffer using nif
+      # buffer = Nif.vec_new(@screen_width * @screen_height * 3)
       %Screen{buffer: buffer, ready: false}
     end
-
-    # def color(0b11), do: <<15, 65, 15>>
-    # def color(0b10), do: <<48, 98, 48>>
-    # def color(0b01), do: <<139, 172, 15>>
-    # def color(0b00), do: <<155, 188, 15>>
 
     # Disable
     def disable(screen), do: Map.put(screen, :enabled, false)
@@ -83,6 +82,7 @@ defmodule Gameboy.Ppu do
     def write(%Screen{buffer: buffer} = screen, value) do
       # Map.put(screen, :buffer, [buffer | elem(@color, value)])
       Map.put(screen, :buffer, [elem(@color, value) | buffer])
+      # send(Info, {:pixel, value})
     end
     def vblank(screen), do: Map.put(screen, :ready, true)
     # def hblank(screen), do: Map.put(screen, :buffer, screen.buffer |> IO.iodata_to_binary())
@@ -108,22 +108,21 @@ defmodule Gameboy.Ppu do
     #   # ScreenServer.flush(buffer)
     #   Map.put(screen, :ready, false)
     # end
+    
+    # Screen buffer using nif
+    # def write(%Screen{buffer: buffer, index: index} = screen, value) do
+    #   Nif.vec_set_array(buffer, index, elem(@color, value))
+    #   Map.put(screen, :index, index + 1)
+    # end
+    # def vblank(screen), do: Map.put(screen, :ready, true)
+    # def flush(%Screen{buffer: buffer} = screen) do
+    #   %{screen | ready: false, index: 0}
+    # end
 
   end
 
-  # defmodule LcdcRegiser do
-  #   defstruct value: 0x00,
-  #             display_enable: false
-
-  #   def init(value) do
-  #     display_enable = (value &&& (1 <<< 7)) != 0
-  #     %LcdcRegiser{value: value, display_enable: display_enable}
-  #   end
-  # end
-
   alias Gameboy.Ppu.Fetcher
   alias Gameboy.Ppu.Screen
-  # alias Gameboy.Ppu.LcdcRegiser
 
   @display_enable 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   defstruct vram: struct(Memory),
@@ -185,13 +184,21 @@ defmodule Gameboy.Ppu do
 
   def line_y(%Ppu{ly: ly} = ppu), do: ly
   # ly is read only
-  def set_line_y(%Ppu{} = ppu, _), do: ppu
+  def set_line_y(ppu, _), do: ppu
 
-  @tile_byte 0..255
+  @tile_byte_low 0..255
   |> Enum.map(fn x ->
     <<b0::size(1), b1::size(1), b2::size(1), b3::size(1),
       b4::size(1), b5::size(1), b6::size(1), b7::size(1)>> = <<x>>
     [b0, b1, b2, b3, b4, b5, b6, b7]
+  end)
+  |> List.to_tuple()
+  @tile_byte_high 0..255
+  |> Enum.map(fn x ->
+    <<b0::size(1), b1::size(1), b2::size(1), b3::size(1),
+      b4::size(1), b5::size(1), b6::size(1), b7::size(1)>> = <<x>>
+    [b0, b1, b2, b3, b4, b5, b6, b7]
+    |> Enum.map(fn y -> y * 2 end)
   end)
   |> List.to_tuple()
 
@@ -213,7 +220,7 @@ defmodule Gameboy.Ppu do
     # data = read_vram(ppu, addr, :bin)
     # parse_tile_byte(data)
     data = read_vram(ppu, addr)
-    elem(@tile_byte, data)
+    elem(@tile_byte_low, data)
   end
 
   def read_tile_line_high(ppu, fetcher) do
@@ -225,14 +232,25 @@ defmodule Gameboy.Ppu do
     # data = read_vram(ppu, addr + 1, :bin)
     # parse_tile_byte(data)
     data = read_vram(ppu, addr + 1)
-    elem(@tile_byte, data)
+    elem(@tile_byte_high, data)
   end
 
   defp push_to_fifo([], [], fifo), do: fifo
   defp push_to_fifo([high | high_rest], [low | low_rest], fifo) do
-    # push_to_fifo(high_rest, low_rest, :queue.in(high + low, fifo))
-    push_to_fifo(high_rest, low_rest, :queue.in((high <<< 1) ||| low, fifo))
+    push_to_fifo(high_rest, low_rest, :queue.in(high ||| low, fifo))
   end
+  # defp push_to_fifo(high, low, fifo) do
+  #   [h0, h1, h2, h3, h4, h5, h6, h7] = high
+  #   [l0, l1, l2, l3, l4, l5, l6, l7] = low
+  #   q = :queue.in(h0 + l0, fifo)
+  #   q = :queue.in(h1 + l1, q)
+  #   q = :queue.in(h2 + l2, q)
+  #   q = :queue.in(h3 + l3, q)
+  #   q = :queue.in(h4 + l4, q)
+  #   q = :queue.in(h5 + l5, q)
+  #   q = :queue.in(h6 + l6, q)
+  #   :queue.in(h7 + l7, q)
+  # end
   # ets fifo
   # defp push_to_fifo([], []), do: nil
   # defp push_to_fifo([high | high_rest], [low | low_rest]) do
@@ -240,22 +258,22 @@ defmodule Gameboy.Ppu do
   #   push_to_fifo(high_rest, low_rest)
   # end
 
-  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_id} = fetcher) do
+  def fetcher_cycle(ppu, %Fetcher{mode: :read_tile_id} = fetcher) do
     tile_id = read_vram(ppu, fetcher.map_addr + fetcher.tile_index)
     %{fetcher | mode: :read_tile_data_low, tile_id: tile_id}
   end
 
-  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_data_low} = fetcher) do
+  def fetcher_cycle(ppu, %Fetcher{mode: :read_tile_data_low} = fetcher) do
     pixel_data = read_tile_line_low(ppu, fetcher)
     %{fetcher | mode: :read_tile_data_high, pixel_data_low: pixel_data}
   end
 
-  def fetcher_cycle(%Ppu{} = ppu, %Fetcher{mode: :read_tile_data_high} = fetcher) do
+  def fetcher_cycle(ppu, %Fetcher{mode: :read_tile_data_high} = fetcher) do
     pixel_data = read_tile_line_high(ppu, fetcher)
     %{fetcher | mode: :push_fifo, pixel_data_high: pixel_data}
   end
 
-  def fetcher_cycle(%Ppu{} = _ppu, %Fetcher{mode: :push_fifo} = fetcher) do
+  def fetcher_cycle(_ppu, %Fetcher{mode: :push_fifo} = fetcher) do
     if fetcher.fifo_size <= 8 do
       # Push pixels to the queue if there are <= 8 pixels in the queue
       # new_fifo = push_to_fifo(fetcher.pixel_data_high, fetcher.pixel_data_low, fetcher.fifo)
@@ -353,20 +371,31 @@ defmodule Gameboy.Ppu do
 
   @even_table 0..456 |> Enum.map(fn x -> rem(x, 2) == 0 end) |> List.to_tuple()
   @multiple_of_four_table 0..456 |> Enum.map(fn x -> rem(x, 4) == 0 end) |> List.to_tuple()
+  @poppable 0..16 |> Enum.map(fn x -> x <= 8 end) |> List.to_tuple()
+  @palette_color 0..0xff
+  |> Enum.map(fn i -> 
+    0..3
+    |> Enum.map(fn j -> (i >>> (j * 2)) &&& 0x3 end)
+    |> List.to_tuple()
+  end)
+  |> List.to_tuple()
   # @leq_eight 0..16 |> Enum.map(fn x -> x <= 8 end) |> List.to_tuple()
   defp cycle_pixel_transfer(%Ppu{fetcher: fetcher} = ppu) do
     counter = ppu.counter + 1
     new_fetcher = if elem(@even_table, counter), do: fetcher_cycle(ppu, fetcher), else: fetcher
     # Only pop if fifo has more than 8 pixels
     # ppu = if new_fetcher.fifo_size <= 8 do
-    ppu = if new_fetcher.fifo_size <= 8 do
+    # ppu = if new_fetcher.fifo_size <= 8 do
+    ppu = if elem(@poppable, new_fetcher.fifo_size) do
       %{ppu | counter: counter, fetcher: new_fetcher}
     else
       # Pop pixel from fifo and print it to screen
       {pixel, new_fetcher} = fetcher_pop(new_fetcher)
       # Put pixel to screen
-      palette_color = (ppu.bgp >>> (pixel * 2)) &&& 0x3
+      # palette_color = (ppu.bgp >>> (pixel * 2)) &&& 0x3
+      palette_color = elem(@palette_color, ppu.bgp) |> elem(pixel)
       screen = Screen.write(ppu.screen, palette_color)
+      # screen = Screen.write(ppu.screen, palette_color)
       new_x = ppu.x + 1
       # Do scanline stuff
       if new_x == 160 do
@@ -527,5 +556,8 @@ defmodule Gameboy.Ppu do
   def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
     Map.put(ppu, :screen, Screen.flush(screen))
   end
+
+  # Screen buffer using nif
+  # def screen_buffer(%Ppu{screen: screen} = _ppu), do: screen.buffer
 
 end

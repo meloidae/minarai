@@ -43,109 +43,114 @@ defmodule Gameboy.Hardware do
     %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu}
   end
 
-  # defp _read(0x00, hw, addr) when hw.bootrom.active do
-  #   machine_cycle(:memory, hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
-  # end
-  # for high_addr <- 0..0xff do
-  #   cond do
-  #     high_addr <= 0x3f ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
-  #       end
-  #     high_addr <= 0x7f ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
-  #       end
-  #     high_addr <= 0x9f ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
-  #       end
-  #     high_addr <= 0xbf ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
-  #       end
-  #     high_addr <= 0xcf ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
-  #       end
-  #     high_addr <= 0xdf ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
-  #       end
-  #     high_addr <= 0xef ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
-  #       end
-  #     high_addr <= 0xfd ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
-  #       end
-  #     high_addr == 0xfe ->
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         low = addr &&& 0xff
-  #         if low <= 0x9f do
-  #           # oam
-  #           raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
-  #         else
-  #           # unusable memory
-  #           raise "Read from unusable memory at #{Utils.to_hex(addr)}"
-  #         end
-  #       end
-  #     true -> 
-  #       defp _read(unquote(high_addr), hw, addr) do
-  #         read_ff(hw, addr)
-  #       end
-  #   end
-  # end
-
-  # def read(%Hardware{} = hw, addr), do: _read((addr >>> 8) &&& 0xff, hw, addr)
-
-  def read(%Hardware{} = hw, addr) do
-    high = (addr >>> 8) &&& 0xff
+  defp _read(hw, addr, 0x00) when hw.bootrom.active do
+    memory_cycle(hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
+  end
+  for high <- 0..0xff do
     cond do
-      high == 0x00 and hw.bootrom.active ->
-        # bootrom
-        machine_cycle(:memory, hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
-      high <= 0x3f -> 
-        # cartridge rom low
-        machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
+      high <= 0x3f ->
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
+        end
       high <= 0x7f ->
-        # cartridge rom high
-        machine_cycle(:memory, hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
+        end
       high <= 0x9f ->
-        # vram
-        machine_cycle(:memory, hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
+        end
       high <= 0xbf ->
-        # cartridge ram
-        raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read(hw, addr, unquote(high)) do
+          raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
+        end
       high <= 0xcf ->
-        # low wram
-        machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+        end
       high <= 0xdf ->
-        # high wram
-        machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+        end
       high <= 0xef ->
-        # low wram (again)
-        machine_cycle(:memory, hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+        end
       high <= 0xfd ->
-        # high ram (again)
-        machine_cycle(:memory, hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+        defp _read(hw, addr, unquote(high)) do
+          memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+        end
       high == 0xfe ->
-        low = addr &&& 0xff
-        if low <= 0x9f do
-          # oam
-          raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
-        else
-          # unusable memory
-          raise "Read from unusable memory at #{Utils.to_hex(addr)}"
+        defp _read(hw, addr, unquote(high)) do
+          low = addr &&& 0xff
+          if low <= 0x9f do
+            # oam
+            raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
+          else
+            # unusable memory
+            raise "Read from unusable memory at #{Utils.to_hex(addr)}"
+          end
         end
       true -> 
-        read_ff(hw, addr)
+        defp _read(hw, addr, _) do
+          read_ff(hw, addr)
+        end
     end
   end
 
+  # @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
+  def read(hw, addr) do
+    # high_addr = elem(@high_addr, addr)
+    high_addr = (addr >>> 8) &&& 0xff
+    _read(hw, addr, high_addr)
+  end
 
-  def read_ff(%Hardware{} = hw, addr) do
+  # def read(hw, addr) do
+  #   high = (addr >>> 8) &&& 0xff
+  #   cond do
+  #     high == 0x00 and hw.bootrom.active ->
+  #       # bootrom
+  #       memory_cycle(hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
+  #     high <= 0x3f -> 
+  #       # cartridge rom low
+  #       memory_cycle(hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
+  #     high <= 0x7f ->
+  #       # cartridge rom high
+  #       memory_cycle(hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
+  #     high <= 0x9f ->
+  #       # vram
+  #       memory_cycle(hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
+  #     high <= 0xbf ->
+  #       # cartridge ram
+  #       raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
+  #     high <= 0xcf ->
+  #       # low wram
+  #       memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+  #     high <= 0xdf ->
+  #       # high wram
+  #       memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+  #     high <= 0xef ->
+  #       # low wram (again)
+  #       memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+  #     high <= 0xfd ->
+  #       # high ram (again)
+  #       memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+  #     high == 0xfe ->
+  #       low = addr &&& 0xff
+  #       if low <= 0x9f do
+  #         # oam
+  #         raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
+  #       else
+  #         # unusable memory
+  #         raise "Read from unusable memory at #{Utils.to_hex(addr)}"
+  #       end
+  #     true -> 
+  #       read_ff(hw, addr)
+  #   end
+  # end
+
+
+  def read_ff(hw, addr) do
     case addr &&& 0xff do
       0x00 -> 
         raise "Read from joypad at #{Utils.to_hex(addr)} is unimplemented"
@@ -164,21 +169,21 @@ defmodule Gameboy.Hardware do
       0x0f ->
         raise "Read from interrupt flag at #{Utils.to_hex(addr)} is unimplemented"
       0x40 ->
-        machine_cycle(:memory, hw, fn hw -> {Ppu.lcd_control(hw.ppu), hw} end)
+        memory_cycle(hw, fn hw -> {Ppu.lcd_control(hw.ppu), hw} end)
       0x41 ->
         raise "Read from ppu lcd status at #{Utils.to_hex(addr)} is unimplemented"
       0x42 ->
-        machine_cycle(:memory, hw, fn hw -> {Ppu.scroll_y(hw.ppu), hw} end)
+        memory_cycle(hw, fn hw -> {Ppu.scroll_y(hw.ppu), hw} end)
       0x43 ->
-        machine_cycle(:memory, hw, fn hw -> {Ppu.scroll_x(hw.ppu), hw} end)
+        memory_cycle(hw, fn hw -> {Ppu.scroll_x(hw.ppu), hw} end)
       0x44 ->
-        machine_cycle(:memory, hw, fn hw -> {Ppu.line_y(hw.ppu), hw} end)
+        memory_cycle(hw, fn hw -> {Ppu.line_y(hw.ppu), hw} end)
       0x45 ->
         raise "Read from ppu compare line at #{Utils.to_hex(addr)} is unimplemented"
       0x46 ->
         raise "Read from oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
-        machine_cycle(:memory, hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
+        memory_cycle(hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
       0x48 ->
         raise "Read from ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
       0x49 ->
@@ -188,62 +193,119 @@ defmodule Gameboy.Hardware do
       0x4b ->
         raise "Read from ppu window x at #{Utils.to_hex(addr)} is unimplemented"
       0xff ->
-        machine_cycle(:memory, hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
+        memory_cycle(hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
       x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
+        memory_cycle(hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
       x when 0x10 <= x and x <= 0x26 ->
-        machine_cycle(:memory, hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
+        memory_cycle(hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
       x when 0x30 <= x and x <= 0x3f ->
-        machine_cycle(:memory, hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
+        memory_cycle(hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
       _ ->
         raise "Read from #{Utils.to_hex(addr)} is unimplemented"
     end
   end
 
+  defp _write(hw, addr, value, 0x00) when hw.bootrom.active do
+    memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
+  end
 
-  def write(%Hardware{} = hw, addr, value) do
-    high = (addr >>> 8) &&& 0xff
+  for high <- 0..0xff do
     cond do
-      high == 0x00 and hw.bootrom.active ->
-        # bootrom
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
       high <= 0x7f ->
-        # cartridge banking
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :cart, Cart.set_bank_control(hw.cart, addr, value)) end)
-        raise "Write to cartridge banking at #{Utils.to_hex(addr)} is unimplemented"
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :cart, Cartridge.set_bank_control(hw.cart, addr, value)) end)
+        end
       high <= 0x9f ->
-        # vram
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value)) end)
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value)) end)
+        end
       high <= 0xbf ->
-        # cartridge ram
-        raise "Write to ram at #{Utils.to_hex(addr)} is unimplemented"
+        defp _write(hw, addr, value, unquote(high)) do
+          raise "Write to ram at #{Utils.to_hex(addr)} is unimplemented"
+        end
       high <= 0xcf ->
-        # low wram
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+        end
       high <= 0xdf ->
-        # high wram
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+        end
       high <= 0xef ->
-        # low wram (again)
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+        end
       high <= 0xfd ->
-        # high ram (again)
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+        defp _write(hw, addr, value, unquote(high)) do
+          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+        end
       high == 0xfe ->
-        low = addr &&& 0xff
-        if low <= 0x9f do
-          # oam
-          raise "Write to oam at #{Utils.to_hex(addr)} is unimplemented"
-        else
-          # unusable memory
-          raise "Write to unusable memory at #{Utils.to_hex(addr)}"
+        defp _write(hw, addr, value, unquote(high)) do
+          low = addr &&& 0xff
+          if low <= 0x9f do
+            # oam
+            raise "Write to oam at #{Utils.to_hex(addr)} is unimplemented"
+          else
+            # unusable memory
+            raise "Write to unusable memory at #{Utils.to_hex(addr)}"
+          end
         end
       true -> #0xff
-        write_ff(hw, addr, value)
+        defp _write(hw, addr, value, unquote(high)) do
+          write_ff(hw, addr, value)
+        end
     end
   end
 
-  def write_ff(%Hardware{} = hw, addr, value) do
+  def write(hw, addr, value) do
+    # high_addr = elem(@high_addr, addr)
+    high_addr = (addr >>> 8) &&& 0xff
+    _write(hw, addr, value, high_addr)
+  end
+
+  # def write(hw, addr, value) do
+  #   high = (addr >>> 8) &&& 0xff
+  #   cond do
+  #     high == 0x00 and hw.bootrom.active ->
+  #       # bootrom
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
+  #     high <= 0x7f ->
+  #       # cartridge banking
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :cart, Cartridge.set_bank_control(hw.cart, addr, value)) end)
+  #       raise "Write to cartridge banking at #{Utils.to_hex(addr)} is unimplemented"
+  #     high <= 0x9f ->
+  #       # vram
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value)) end)
+  #     high <= 0xbf ->
+  #       # cartridge ram
+  #       raise "Write to ram at #{Utils.to_hex(addr)} is unimplemented"
+  #     high <= 0xcf ->
+  #       # low wram
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+  #     high <= 0xdf ->
+  #       # high wram
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+  #     high <= 0xef ->
+  #       # low wram (again)
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+  #     high <= 0xfd ->
+  #       # high ram (again)
+  #       memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+  #     high == 0xfe ->
+  #       low = addr &&& 0xff
+  #       if low <= 0x9f do
+  #         # oam
+  #         raise "Write to oam at #{Utils.to_hex(addr)} is unimplemented"
+  #       else
+  #         # unusable memory
+  #         raise "Write to unusable memory at #{Utils.to_hex(addr)}"
+  #       end
+  #     true -> #0xff
+  #       write_ff(hw, addr, value)
+  #   end
+  # end
+
+  def write_ff(hw, addr, value) do
     case addr &&& 0xff do
       0x00 -> 
         raise "Write to joypad at #{Utils.to_hex(addr)} is unimplemented"
@@ -262,13 +324,13 @@ defmodule Gameboy.Hardware do
       0x0f ->
         raise "Write to interrupt flag at #{Utils.to_hex(addr)} is unimplemented"
       0x40 ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_control(hw.ppu, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_control(hw.ppu, value)) end)
       0x41 ->
         raise "Write to ppu lcd status at #{Utils.to_hex(addr)} is unimplemented"
       0x42 ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_y(hw.ppu, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_y(hw.ppu, value)) end)
       0x43 ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_x(hw.ppu, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_x(hw.ppu, value)) end)
       0x44 ->
         raise "Write to ppu current line at #{Utils.to_hex(addr)} is unimplemented"
       0x45 ->
@@ -276,7 +338,7 @@ defmodule Gameboy.Hardware do
       0x46 ->
         raise "Write to oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :ppu, Ppu.set_bg_palette(hw.ppu, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_bg_palette(hw.ppu, value)) end)
       0x48 ->
         raise "Write to ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
       0x49 ->
@@ -288,22 +350,22 @@ defmodule Gameboy.Hardware do
       0xff ->
         raise "Write to interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x80 <= x and x <= 0xfe ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
       x when 0x10 <= x and x <= 0x26 ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
       x when 0x30 <= x and x <= 0x3f ->
-        machine_cycle(:memory, hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
+        memory_cycle(hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
       _ ->
         raise "Write to #{Utils.to_hex(addr)} is unimplemented"
     end
   end
 
-  def machine_cycle(:memory, hw, memory_fn) do
+  def memory_cycle(hw, memory_fn) do
     hw = machine_cycle(hw)
     memory_fn.(hw)
   end
 
-  defp machine_cycle(:timer, _hw) do
+  defp timer_cycle(_hw) do
     # oam
     # ppu
     # timer
