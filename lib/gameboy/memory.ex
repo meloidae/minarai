@@ -24,6 +24,13 @@ defmodule Gameboy.Memory do
 
   def read(%Memory{data: data} = _memory, addr), do: :binary.at(data, addr)
 
+  def read_range(%Memory{data: data} = _memory, addr, len), do: :binary.bin_to_list(data, addr, len)
+
+  def read_int(%Memory{data: data} = _memory, addr, size) do 
+    <<_first::binary-size(addr), value::integer-size(size), _rest::binary>> = data
+    value
+  end
+
 
   def write(%Memory{data: data} = memory, addr, value) do
     <<first::binary-size(addr), _::binary-size(1), rest::binary>> = data

@@ -7,7 +7,7 @@ defmodule Minarai.Scene.Info do
   alias Scenic.Cache.Dynamic.Texture, as: Cache
 
   alias Gameboy.Utils
-  alias Gameboy.Ppu
+  alias Gameboy.SimplePpu, as: Ppu
 
   # Constants
   @graph Graph.build(font: :roboto, font_size: 24)
@@ -29,9 +29,10 @@ defmodule Minarai.Scene.Info do
     graph = @graph
             |> rect({160, 144},
               fill: {:dynamic, "screen"},
-              scale: -@pixel_size,
+              # scale: -@pixel_size,
+              # translate: {160 * @pixel_size, 144 * @pixel_size},
+              scale: @pixel_size,
               pin: {0, 0},
-              translate: {160 * @pixel_size, 144 * @pixel_size},
               id: :gameboy
             )
 
@@ -41,7 +42,7 @@ defmodule Minarai.Scene.Info do
     state = %{
       viewport: viewport,
       graph: graph,
-      # pid: spawn_link(fn -> Gameboy.start() end),
+      pid: spawn_link(fn -> Gameboy.start() end),
       # gb: gb,
       # frame_timer: timer,
       # screen: screen

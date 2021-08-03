@@ -1,7 +1,8 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
   alias Gameboy.Cpu
-  alias Gameboy.Ppu
+  # alias Gameboy.Ppu
+  alias Gameboy.SimplePpu, as: Ppu
   import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   import Gameboy.Cpu.Decode, only: [decode_exec: 2]
 
@@ -43,6 +44,7 @@ defmodule Gameboy do
       send(Info, {:animate_frame, Ppu.screen_buffer(gb.hw.ppu)})
       # send(Info, :animate_frame)
       # ScreenServer.animate(gb.hw.ppu.screen.buffer)
+      # gb.hw.ppu
       Ppu.flush_screen_buffer(gb.hw.ppu)
     else
       gb.hw.ppu
