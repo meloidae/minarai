@@ -13,6 +13,9 @@ defmodule Gameboy.Bootrom do
     # %Bootrom{memory: EtsMemory.init_from_binary(:bootrom, data), active: true}
   end
 
+  # Non-zero value disables bootrom
+  def set_enable(bootrom, value), do: Map.put(bootrom, :active, value == 0)
+
   def read(%{memory: memory} = _bootrom, addr), do: Memory.read(memory, addr)
   # def read(%{memory: memory} = _bootrom, addr), do: EtsMemory.read(memory, addr)
 

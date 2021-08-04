@@ -10,6 +10,13 @@ defmodule Gameboy.Cpu.Execute do
     Cpu.write(cpu, dst, hw, value)
   end
 
+  def debug(cpu, _hw) do
+    IO.puts("#{inspect(cpu)}")
+    receive do
+      _ -> IO.puts("Done")
+    end
+  end
+
   # 16 bit loads
   # LD rr, nn
   # 12 cycles

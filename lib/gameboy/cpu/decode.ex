@@ -34,7 +34,9 @@ defmodule Gameboy.Cpu.Decode do
   def instruction(0x7d, cpu, hw), do: Exec.ld(cpu, hw, :a, :l)
   def instruction(0x7e, cpu, hw), do: Exec.ld(cpu, hw, :a, :hl)
   def instruction(0x47, cpu, hw), do: Exec.ld(cpu, hw, :b, :a)
+
   def instruction(0x40, cpu, hw), do: Exec.ld(cpu, hw, :b, :b)
+
   def instruction(0x41, cpu, hw), do: Exec.ld(cpu, hw, :b, :c)
   def instruction(0x42, cpu, hw), do: Exec.ld(cpu, hw, :b, :d)
   def instruction(0x43, cpu, hw), do: Exec.ld(cpu, hw, :b, :e)

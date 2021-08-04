@@ -17,7 +17,9 @@ defmodule Minarai.Scene.Info do
 
 
   # Initalization
-  def init(_arg, opts) do
+  def init(arg, opts) do
+    # IO.puts("arg: #{inspect(arg)}")
+    # IO.puts("opts: #{inspect(opts)}")
     viewport = opts[:viewport]
 
     screen = Texture.build!(:rgb, 160, 144, clear: {155, 188, 15})

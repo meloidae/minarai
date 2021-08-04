@@ -9,6 +9,8 @@ defmodule Gameboy.Cartridge do
             ram: %{memory: struct(Memory), offset: 0x0}
 
   @path "roms/Upwell.gb"
+  # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/06-ld r,r.gb"
   @cart_type 0x0147
   @rom_size 0x0148
   @ram_size 0x0149

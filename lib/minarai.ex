@@ -3,9 +3,11 @@ defmodule Minarai do
   Starter application using the Scenic framework.
   """
 
-  def start(_type, _args) do
+  def start(_type, args) do
+    # IO.puts("minarai.ex: #{inspect(System.argv())}")
     # load the viewport configuration from config
     main_viewport_config = Application.get_env(:minarai, :viewport)
+    IO.puts("main_viewport_config = #{inspect(main_viewport_config)}")
 
     # start the application with the viewport
     children = [

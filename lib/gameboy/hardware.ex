@@ -317,6 +317,9 @@ defmodule Gameboy.Hardware do
         raise "Write to ppu window y at #{Utils.to_hex(addr)} is unimplemented"
       0x4b ->
         raise "Write to ppu window x at #{Utils.to_hex(addr)} is unimplemented"
+      0x50 ->
+        memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.set_enable(hw.bootrom, value)) end)
+        # raise "Write to disable bootrom at #{Utils.to_hex(addr)} is unimplemented"
       0xff ->
         raise "Write to interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
       x when 0x80 <= x and x <= 0xfe ->
