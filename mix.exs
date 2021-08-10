@@ -6,7 +6,7 @@ defmodule Minarai.MixProject do
       app: :minarai,
       version: "0.1.0",
       elixir: "~> 1.7",
-      build_embedded: true,
+      # build_embedded: true,
       start_permanent: Mix.env() == :prod,
       deps: deps()
     ]
@@ -15,8 +15,7 @@ defmodule Minarai.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
-      mod: {Minarai, []},
-      extra_applications: [:crypto]
+      extra_applications: [:logger, :wx]
     ]
   end
 
@@ -25,7 +24,7 @@ defmodule Minarai.MixProject do
     [
       # {:scenic, "~> 0.10"},
       # {:scenic_driver_glfw, "~> 0.10", targets: :host},
-      {:scenic_driver_glfw, path: "../scenic_driver_glfw", targets: :host},
+      # {:scenic_driver_glfw, path: "../scenic_driver_glfw", targets: :host},
     ]
   end
 end

@@ -31,7 +31,7 @@ defmodule Gameboy.SimplePpu do
       Map.put(screen, :buffer, [elem(@color, value) | buffer])
     end
     def vblank(screen) do
-      send(Info, {:animate_frame, screen.buffer |> IO.iodata_to_binary()})
+      send(Minarai, {:update, screen.buffer |> IO.iodata_to_binary()})
       Map.put(screen, :ready, true)
     end
     # def hblank(screen), do: Map.put(screen, :buffer, screen.buffer |> IO.iodata_to_binary())
