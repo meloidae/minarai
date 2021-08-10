@@ -6,6 +6,7 @@ defmodule Gameboy.Bootrom do
   # defstruct memory: struct(EtsMemory), active: false
 
   @path "roms/DMG_ROM.bin"
+  # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 
   def init(path \\ @path) do
     data = File.read!(path)

@@ -2,6 +2,7 @@ defmodule Gameboy.Cpu do
   use Bitwise
   alias Gameboy.Cpu
   alias Gameboy.Hardware
+  alias Gameboy.Interrupts
   alias Gameboy.Utils
 
   # defmodule RegisterFile do
@@ -48,10 +49,33 @@ defmodule Gameboy.Cpu do
     {%{cpu | opcode: opcode, pc: (addr + 1) &&& 0xffff}, hw}
   end
 
-  # handle interrupt
-  # TODO
+  # handle interrupt TODO
   def handle_interrupt(cpu, hw) do
-    {cpu, hw}
+    if cpu.ime do
+      case Interrupts.check(hw.intr) do
+        nil ->
+          # No interrupt is requested
+          {cpu, hw}
+        {addr, mask} ->
+          # Add 8 cycles
+          hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
+          # Push value of pc on to stack
+          pc = cpu.pc
+          low = pc &&& 0xff
+          high = pc >>> 8
+          sp = (cpu.sp - 1) &&& 0xffff
+          hw = Hardware.synced_write(hw, sp, high)
+          sp = (sp - 1) &&& 0xffff
+          hw = Hardware.synced_write(hw, sp, low)
+          # Acknowledge interrupt
+          Interrupts.acknowledge(hw.intr, mask)
+          # Change pc to address specified by interrupt and switch to running state
+          {%{cpu | pc: addr, sp: sp, state: :running}, hw}
+      end
+    else
+      # interrupt is not enabled
+      {cpu, hw}
+    end
   end
   # def handle_interrupt(gb) do
   #   gb
@@ -85,6 +109,8 @@ defmodule Gameboy.Cpu do
   def write_register(cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
   def write_register(cpu, :pc, data), do: Map.put(cpu, :pc, data)
   def write_register(cpu, :sp, data), do: Map.put(cpu, :sp, data)
+  # def write_register(cpu, :pc, data), do: %{cpu | pc: data}
+  # def write_register(cpu, :sp, data), do: %{cpu | sp: data}
 
 
   # 8-bit writes to a register
@@ -305,7 +331,8 @@ defmodule Gameboy.Cpu do
     addr = cpu.pc
     {value, hw} = Hardware.synced_read(hw, addr)
     # {value, write_register(cpu, :pc, (addr + 1) &&& 0xffff), hw}
-    {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
+    # {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
+    {value, %{cpu | pc: (addr + 1) &&& 0xffff}, hw}
   end
 
   # Fetch 16 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
@@ -322,10 +349,11 @@ defmodule Gameboy.Cpu do
     high = (data >>> 8) &&& 0xff
     sp = cpu.sp
     sp = (sp - 1) &&& 0xffff
+    # IO.puts("high sp = #{Utils.to_hex(sp)}")
     hw = Hardware.synced_write(hw, sp, high)
     sp = (sp - 1) &&& 0xffff
+    # IO.puts("low sp = #{Utils.to_hex(sp)}")
     hw = Hardware.synced_write(hw, sp, low)
-    # {Cpu.write_register(cpu, :sp, sp), hw}
     {Map.put(cpu, :sp, sp), hw}
   end
 

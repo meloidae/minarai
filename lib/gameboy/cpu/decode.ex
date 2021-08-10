@@ -8,13 +8,23 @@ defmodule Gameboy.Cpu.Decode do
       nil ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         instruction(cpu.opcode, cpu, hw)
-        # elem(@instructions, cpu.opcode).(cpu, hw)
+        # try do
+        #   instruction(cpu.opcode, cpu, hw)
+        # rescue
+        #   e in RuntimeError ->
+        #     IO.puts("[error]")
+        #     IO.puts("opcode = #{Utils.to_hex(cpu.opcode)}")
+        #     IO.puts("#{inspect(cpu)}")
+        #     receive do
+        #       _ ->
+        #         true
+        #     end
+        #     raise "#{inspect(cpu)}"
+        # end
       value ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         cpu = instruction(cpu.opcode, cpu, hw)
-        # cpu = elem(@instructions, cpu.opcode).(cpu, hw)
-        cpu = Map.put(cpu, :ime, value)
-        {Map.put(cpu, :delayed_set_ime, nil), hw}
+        {%{cpu | ime: value, delayed_set_ime: nil}, hw}
     end
   end
 
@@ -35,7 +45,8 @@ defmodule Gameboy.Cpu.Decode do
   def instruction(0x7e, cpu, hw), do: Exec.ld(cpu, hw, :a, :hl)
   def instruction(0x47, cpu, hw), do: Exec.ld(cpu, hw, :b, :a)
 
-  def instruction(0x40, cpu, hw), do: Exec.ld(cpu, hw, :b, :b)
+  # def instruction(0x40, cpu, hw), do: Exec.ld(cpu, hw, :b, :b)
+  def instruction(0x40, cpu, hw), do: Exec.debug(cpu, hw)
 
   def instruction(0x41, cpu, hw), do: Exec.ld(cpu, hw, :b, :c)
   def instruction(0x42, cpu, hw), do: Exec.ld(cpu, hw, :b, :d)

@@ -6,8 +6,9 @@ defmodule Minarai do
   def start(_type, args) do
     # IO.puts("minarai.ex: #{inspect(System.argv())}")
     # load the viewport configuration from config
+    # :erlang.system_flag(:fullsweep_after, 0) 
     main_viewport_config = Application.get_env(:minarai, :viewport)
-    IO.puts("main_viewport_config = #{inspect(main_viewport_config)}")
+    # IO.puts("main_viewport_config = #{inspect(main_viewport_config)}")
 
     # start the application with the viewport
     children = [

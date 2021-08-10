@@ -16,21 +16,33 @@ defmodule Gameboy do
 
   def step(%{cpu: cpu, hw: hw} = gb) do
     # Handle interrupts
-    # {cpu, hw} = handle_interrupt(cpu, hw)
-    {cpu, hw} = case cpu.state do
+    {cpu, hw} = handle_interrupt(cpu, hw)
+    case cpu.state do
       :running ->
+        # {cpu, hw} = fetch_next(cpu, hw, cpu.pc)
+        # {cpu, hw} = decode_exec(cpu, hw)
         {cpu, hw} = fetch_next(cpu, hw, cpu.pc)
         {cpu, hw} = decode_exec(cpu, hw)
+        # {cpu, hw} = try do
+        #   decode_exec(cpu, hw)
+        # rescue
+        #   e in RuntimeError ->
+        #     IO.puts("#{inspect(e)}")
+        #     raise "#{inspect(cpu)}"
+        # end
+        %{gb | cpu: cpu, hw: hw}
       :haltbug ->
         # Halt bug. Fetch but don't increment pc
         pc = cpu.pc
         {cpu, hw} = fetch_next(cpu, hw, pc)
-        cpu = Map.put(cpu, :pc, pc)
-        {cpu, hw} = decode_exec(Map.put(cpu, :state, :running), hw)
-      _ ->
-        {cpu, hw}
+        cpu = %{cpu | pc: pc, state: :running}
+        {cpu, hw} = decode_exec(cpu, hw)
+        %{gb | cpu: cpu, hw: hw}
+      :halt ->
+        Map.put(gb, :hw, Hardware.sync_cycle(hw))
+      _ -> # stop?
+        gb
     end
-    %{gb | cpu: cpu, hw: hw}
   end
 
   def start() do
@@ -38,17 +50,24 @@ defmodule Gameboy do
     loop(gb)
   end
 
-  defp loop(gb) do
-    gb = Gameboy.step(gb)
-    ppu = if gb.hw.ppu.screen.ready do
-      send(Info, {:animate_frame, Ppu.screen_buffer(gb.hw.ppu)})
-      # send(Info, :animate_frame)
-      # ScreenServer.animate(gb.hw.ppu.screen.buffer)
-      # gb.hw.ppu
-      Ppu.flush_screen_buffer(gb.hw.ppu)
-    else
-      gb.hw.ppu
-    end
-    loop(put_in(gb.hw.ppu, ppu))
+  defp loop(gb), do: loop(Gameboy.step(gb))
+
+  @break 0x100
+  def debug_start() do
+    gb = Gameboy.init()
+    debug_loop(gb)
+  end
+
+  defp debug_loop(gb) when gb.cpu.pc === @break, do: debug_step(gb)
+  defp debug_loop(gb), do: debug_loop(Gameboy.step(gb))
+
+  defp debug_step(gb) do
+    # IO.puts("#{inspect(gb.cpu)}")
+    # receive do
+    #   :step ->
+    #     true
+    # end
+
+    debug_step(Gameboy.step(gb))
   end
 end

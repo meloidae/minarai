@@ -2,6 +2,7 @@ defmodule Gameboy.SimplePpu do
   use Bitwise
   alias Gameboy.Memory
   alias Gameboy.SimplePpu, as: Ppu
+  alias Gameboy.Interrupts
 
   defmodule Screen do
 
@@ -29,7 +30,10 @@ defmodule Gameboy.SimplePpu do
     def write(%Screen{buffer: buffer} = screen, value) do
       Map.put(screen, :buffer, [elem(@color, value) | buffer])
     end
-    def vblank(screen), do: Map.put(screen, :ready, true)
+    def vblank(screen) do
+      send(Info, {:animate_frame, screen.buffer |> IO.iodata_to_binary()})
+      Map.put(screen, :ready, true)
+    end
     # def hblank(screen), do: Map.put(screen, :buffer, screen.buffer |> IO.iodata_to_binary())
     def flush(screen) do
       %{screen | ready: false, buffer: []}
@@ -48,11 +52,13 @@ defmodule Gameboy.SimplePpu do
             scx: 0x00,
             ly: 0x00,
             lyc: 0x00,
+            wx: 0x00,
+            wy: 0x00,
             bgp: 0x00,
             screen: nil
 
   @vram_size 0x4000
-  @oam_size 0x100
+  @oam_size 0xa0
   @vram_mask 0x1fff
   @byte_mask 0xff
 
@@ -68,40 +74,127 @@ defmodule Gameboy.SimplePpu do
     %Ppu{vram: vram, oam: oam, counter: 0, screen: screen}
   end
 
-  def read_vram(%Ppu{vram: vram} = _ppu, addr), do: Memory.read(vram, addr &&& @vram_mask)
+  def read_oam(%Ppu{mode: mode, oam: oam} = _ppu, addr) do
+    # oam is not accessible during pixel transfer & oam search
+    if mode == :pixel_transfer or mode == :oam_search do
+      0xff
+    else
+      Memory.read(oam, addr)
+    end
+  end
+
+  def write_oam(%Ppu{mode: mode, oam: oam} = ppu, addr, value) do
+    # oam is not accessible during pixel transfer & oam search
+    if mode == :pixel_transfer or mode == :oam_search do
+      ppu
+    else
+      Map.put(ppu, :oam, Memory.write(oam, addr, value))
+    end
+  end
+
+  def read_vram(%Ppu{mode: mode, vram: vram} = _ppu, addr) do
+    if mode == :pixel_transfer do
+      # vram is not accessible during pixel transfer (mode 3)
+      0xff
+    else
+      Memory.read(vram, addr &&& @vram_mask)
+    end
+  end
 
   defp read_range_vram(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr &&& @vram_mask, len)
 
   defp read_int_vram(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr &&& @vram_mask, size)
 
-  def write_vram(%Ppu{vram: vram} = ppu, addr, value) do
-    Map.put(ppu, :vram, Memory.write(vram, addr &&& @vram_mask, value))
+  def write_vram(%Ppu{mode: mode, vram: vram} = ppu, addr, value) do
+    if mode == :pixel_transfer do
+      # vram is not accessible during pixel transfer (mode 3)
+      ppu
+    else 
+      Map.put(ppu, :vram, Memory.write(vram, addr &&& @vram_mask, value))
+    end
   end
 
   def lcd_control(%Ppu{lcdc: lcdc} = _ppu), do: lcdc
 
   def set_lcd_control(%Ppu{} = ppu, value), do: Map.put(ppu, :lcdc, value &&& 0xff)
 
+  def lcd_status(%Ppu{mode: :hblank} = ppu) do
+    if ppu.ly === ppu.lyc do
+      ppu.lcds ||| 0b100
+    else
+      # Lower 3 bits are 0b000 so no point in binary or
+      ppu.lcds
+    end
+  end
+  def lcd_status(%Ppu{mode: :vblank} = ppu) do
+    if ppu.ly === ppu.lyc do
+      ppu.lcds ||| 0b101
+    else
+      ppu.lcds ||| 0b001
+    end
+  end
+  def lcd_status(%Ppu{mode: :oam_search} = ppu) do
+    if ppu.ly === ppu.lyc do
+      ppu.lcds ||| 0b110
+    else
+      ppu.lcds ||| 0b010
+    end
+  end
+  def lcd_status(%Ppu{mode: :pixel_transfer} = ppu) do
+    if ppu.ly === ppu.lyc do
+      ppu.lcds ||| 0b111
+    else
+      ppu.lcds ||| 0b011
+    end
+  end
+
+  def set_lcd_status(ppu, value) do
+    # Only bit 3-6 are writable
+    Map.put(ppu, :lcds, value &&& 0b0111_1000)
+  end
+
   def bg_palette(%Ppu{bgp: bgp} = ppu), do: bgp
 
   def set_bg_palette(%Ppu{} = ppu, value), do: Map.put(ppu, :bgp, value &&& 0xff)
 
-  def scroll_y(%Ppu{scy: scy} = ppu), do: scy
+  def scroll_y(%Ppu{scy: scy} = _ppu), do: scy
   def set_scroll_y(%Ppu{} = ppu, value), do: Map.put(ppu, :scy, value &&& 0xff)
 
-  def scroll_x(%Ppu{scx: scx} = ppu), do: scx
+  def scroll_x(%Ppu{scx: scx} = _ppu), do: scx
   def set_scroll_x(%Ppu{} = ppu, value), do: Map.put(ppu, :scx, value &&& 0xff)
 
-  def line_y(%Ppu{ly: ly} = ppu), do: ly
+  def line_y(%Ppu{ly: ly} = _ppu), do: ly
   # ly is read only
   def set_line_y(ppu, _), do: ppu
 
-  def cycle(ppu) do
+  def line_y_compare(%Ppu{lyc: lyc} = _ppu), do: lyc
+  def set_line_y_compare(%Ppu{lyc: lyc} = ppu, value), do: Map.put(ppu, :lyc, value &&& 0xff)
+
+  def window_x(%Ppu{wx: wx} = _ppu), do: wx
+  def set_window_x(%Ppu{} = ppu, value), do: Map.put(ppu, :wx, value &&& 0xff)
+
+  def window_y(%Ppu{wy: wy} = _ppu), do: wy
+  def set_window_y(%Ppu{} = ppu, value), do: Map.put(ppu, :wy, value &&& 0xff)
+
+  @lyc_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
+  |> List.to_tuple()
+  @oam_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
+  |> List.to_tuple()
+  @vblank_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
+  |> List.to_tuple()
+  @hblank_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 3)) != 0 end)
+  |> List.to_tuple()
+
+  def cycle(ppu, intr) do
     enabled = elem(@display_enable, ppu.lcdc)
-    if enabled, do: do_cycle(ppu), else: ppu
+    if enabled, do: do_cycle(ppu, intr), else: ppu
   end
 
-  defp do_cycle(ppu) do
+  defp do_cycle(ppu, intr) do
     counter = ppu.counter - 1
     if counter > 0 do
       Map.put(ppu, :counter, counter)
@@ -112,19 +205,28 @@ defmodule Gameboy.SimplePpu do
         :pixel_transfer ->
           # Draw line
           ppu = draw_scanline(ppu)
+          if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
           %{ppu | mode: :hblank, counter: @hblank_cycles}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
+            Interrupts.request(intr, :vblank)
+            if elem(@vblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
+            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
             %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly, screen: Screen.vblank(ppu.screen)}
           else
+            if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
+            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
             %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}
           end
         :vblank ->
           new_ly = ppu.ly + 1
           if new_ly == 153 do
-            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0}
+            if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
+            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
+            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, screen: Screen.flush(ppu.screen)}
           else
+            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
             %{ppu | counter: @vblank_cycles, ly: new_ly}
           end
       end

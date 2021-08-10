@@ -9,7 +9,9 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Wram
   alias Gameboy.Hram
   alias Gameboy.Apu
+  alias Gameboy.Timer
   alias Gameboy.Interrupts
+  alias Gameboy.Serial
   alias Gameboy.Utils
 
   defstruct bootrom: struct(Bootrom),
@@ -18,20 +20,25 @@ defmodule Gameboy.Hardware do
             wram: struct(Wram),
             hram: struct(Hram),
             apu: struct(Apu),
-            timer: 0,
-            intr: struct(Interrupts),
+            timer: struct(Timer),
+            intr: nil,
+            serial: struct(Serial),
             counter: 0
+
+  @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
+  @low_addr 0..0xffff |> Enum.map(fn x -> x &&& 0xff end) |> List.to_tuple()
 
   def synced_read(hw, addr) do
     Hardware.read(hw, addr)
   end
   def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 ||| addr)
   def synced_write(hw, addr, data) do
+    # IO.puts("synced_write: addr = #{Utils.to_hex(addr)}")
     Hardware.write(hw, addr, data)
   end
   def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 ||| addr, data)
   def sync_cycle(hw) do
-    hw
+    hardware_cycle(hw)
   end
 
   def init() do
@@ -41,7 +48,9 @@ defmodule Gameboy.Hardware do
     wram = Wram.init()
     hram = Hram.init()
     apu = Apu.init()
-    %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu}
+    timer = Timer.init()
+    intr = Interrupts.init()
+    %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu, timer: timer, intr: intr}
   end
 
   defp _read(hw, addr, 0x00) when hw.bootrom.active do
@@ -86,7 +95,7 @@ defmodule Gameboy.Hardware do
           low = addr &&& 0xff
           if low <= 0x9f do
             # oam
-            raise "Read from oam at #{Utils.to_hex(addr)} is unimplemented"
+            memory_cycle(hw, fn hw -> {Ppu.read_oam(hw.ppu, low), hw} end)
           else
             # unusable memory
             raise "Read from unusable memory at #{Utils.to_hex(addr)}"
@@ -99,7 +108,6 @@ defmodule Gameboy.Hardware do
     end
   end
 
-  @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
   def read(hw, addr) do
     high_addr = elem(@high_addr, addr)
     # high_addr = (addr >>> 8) &&& 0xff
@@ -121,55 +129,55 @@ defmodule Gameboy.Hardware do
           raise "Read from serial control at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x04 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from div register at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          timer_read_cycle(hw, fn timer, intr -> Timer.div_cycle(timer, intr) end)
         end
       0x05 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from tima register at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          timer_read_cycle(hw, fn timer, intr -> Timer.tima_cycle(timer, intr) end)
         end
       0x06 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from tma register at #{Utils.to_hex(addr)} is unimplemtened"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          timer_read_cycle(hw, fn timer, intr -> Timer.tma_cycle(timer, intr) end)
         end
       0x07 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from tac register at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          timer_read_cycle(hw, fn timer, intr -> Timer.tac_cycle(timer, intr) end)
         end
       0x0f ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from interrupt flag at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          memory_cycle(hw, fn hw -> {Interrupts.interrupt_flag(hw.intr), hw} end)
         end
       0x40 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.lcd_control(hw.ppu), hw} end)
         end
       0x41 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu lcd status at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          memory_cycle(hw, fn hw -> {Ppu.lcd_status(hw.ppu), hw} end)
         end
       0x42 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.scroll_y(hw.ppu), hw} end)
         end
       0x43 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.scroll_x(hw.ppu), hw} end)
         end
       0x44 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.line_y(hw.ppu), hw} end)
         end
       0x45 ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu compare line at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          memory_cycle(hw, fn hw -> {Ppu.line_y_compare(hw.ppu), hw} end)
         end
       0x46 ->
         defp _read_ff(hw, addr, unquote(low)) do
           raise "Read from oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x47 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
         end
       0x48 ->
@@ -181,15 +189,15 @@ defmodule Gameboy.Hardware do
           raise "Read from ppu obj palette1 at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x4a ->
-        defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu window y at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, _addr, unquote(low)) do
+          memory_cycle(hw, fn hw -> {Ppu.window_y(hw.ppu), hw} end)
         end
       0x4b ->
         defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu window x at #{Utils.to_hex(addr)} is unimplemented"
+          memory_cycle(hw, fn hw -> {Ppu.window_x(hw.ppu), hw} end)
         end
       0xff ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
         end
       x when 0x80 <= x and x <= 0xfe ->
@@ -212,7 +220,8 @@ defmodule Gameboy.Hardware do
   end
 
   def read_ff(hw, addr) do
-    low = addr &&& 0xff
+    # low = addr &&& 0xff
+    low = elem(@low_addr, addr)
     _read_ff(hw, addr, low)
   end
 
@@ -256,7 +265,7 @@ defmodule Gameboy.Hardware do
           low = addr &&& 0xff
           if low <= 0x9f do
             # oam
-            raise "Write to oam at #{Utils.to_hex(addr)} is unimplemented"
+            memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_oam(hw.ppu, low, value)) end)
           else
             # unusable memory
             raise "Write to unusable memory at #{Utils.to_hex(addr)}"
@@ -264,6 +273,7 @@ defmodule Gameboy.Hardware do
         end
       true -> #0xff
         defp _write(hw, addr, value, unquote(high)) do
+          # IO.puts("addr = #{Utils.to_hex(addr)}")
           write_ff(hw, addr, value)
         end
     end
@@ -272,27 +282,33 @@ defmodule Gameboy.Hardware do
   def write(hw, addr, value) do
     high_addr = elem(@high_addr, addr)
     # high_addr = (addr >>> 8) &&& 0xff
+    # IO.puts("write: addr = #{Utils.to_hex(addr)}")
     _write(hw, addr, value, high_addr)
   end
 
   def write_ff(hw, addr, value) do
+    # IO.puts("write_ff: addr = #{Utils.to_hex(addr)}")
     case addr &&& 0xff do
       0x00 -> 
         raise "Write to joypad at #{Utils.to_hex(addr)} is unimplemented"
       0x01 ->
-        raise "Write to serial data at #{Utils.to_hex(addr)} is unimplemented"
+        # IO.puts("addr = #{Utils.to_hex(addr)}, value = #{Utils.to_hex(value)}")
+        memory_cycle(hw, fn hw -> Map.put(hw, :serial, Serial.set_serial_data(hw.serial, value)) end)
       0x02 ->
-        raise "Write to serial control at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :serial, Serial.set_serial_control(hw.serial, value)) end)
       0x04 ->
-        raise "Write to div register at #{Utils.to_hex(addr)} is unimplemented"
+        timer_write_cycle(hw, fn timer, intr -> Timer.set_div_cycle(timer, intr) end)
       0x05 ->
-        raise "Write to tima register at #{Utils.to_hex(addr)} is unimplemented"
+        timer_write_cycle(hw, fn timer, intr -> Timer.set_tima_cycle(timer, intr, value) end)
       0x06 ->
-        raise "Write to tma register at #{Utils.to_hex(addr)} is unimplemtened"
+        timer_write_cycle(hw, fn timer, intr -> Timer.set_tma_cycle(timer, intr, value) end)
       0x07 ->
-        raise "Write to tac register at #{Utils.to_hex(addr)} is unimplemented"
+        timer_write_cycle(hw, fn timer, intr -> Timer.set_tac_cycle(timer, intr, value) end)
       0x0f ->
-        raise "Write to interrupt flag at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw ->
+          Interrupts.set_interrupt_flag(hw.intr, value)
+          hw
+        end)
       0x40 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_control(hw.ppu, value)) end)
       0x41 ->
@@ -302,9 +318,9 @@ defmodule Gameboy.Hardware do
       0x43 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_x(hw.ppu, value)) end)
       0x44 ->
-        raise "Write to ppu current line at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_line_y(hw.ppu, value)) end)
       0x45 ->
-        raise "Write to ppu compare line at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_line_y_compare(hw.ppu, value)) end)
       0x46 ->
         raise "Write to oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
       0x47 ->
@@ -314,14 +330,17 @@ defmodule Gameboy.Hardware do
       0x49 ->
         raise "Write to ppu obj palette1 at #{Utils.to_hex(addr)} is unimplemented"
       0x4a ->
-        raise "Write to ppu window y at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_window_y(hw.ppu, value)) end)
       0x4b ->
-        raise "Write to ppu window x at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_window_x(hw.ppu, value)) end)
       0x50 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.set_enable(hw.bootrom, value)) end)
         # raise "Write to disable bootrom at #{Utils.to_hex(addr)} is unimplemented"
       0xff ->
-        raise "Write to interrupt enable at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw ->
+          Interrupts.set_interrupt_enable(hw.intr, value)
+          hw
+        end)
       x when 0x80 <= x and x <= 0xfe ->
         memory_cycle(hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
       x when 0x10 <= x and x <= 0x26 ->
@@ -334,22 +353,37 @@ defmodule Gameboy.Hardware do
   end
 
   def memory_cycle(hw, memory_fn) do
-    hw = machine_cycle(hw)
+    hw = hardware_cycle(hw)
     memory_fn.(hw)
   end
 
-  defp timer_cycle(_hw) do
+  defp timer_read_cycle(hw, timer_fn) do
     # oam
     # ppu
+    ppu = Ppu.cycle(hw.ppu, hw.intr)
     # timer
+    {value, timer} = timer_fn.(hw.timer, hw.intr)
+    {value, %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}}
   end
 
-  def machine_cycle(%Hardware{ppu: ppu} = hw) do
+  defp timer_write_cycle(hw, timer_fn) do
     # oam
     # ppu
-    ppu = Ppu.cycle(ppu)
+    ppu = Ppu.cycle(hw.ppu, hw.intr)
     # timer
-    %{hw | ppu: ppu, counter: hw.counter + 4}
+    timer = timer_fn.(hw.timer, hw.intr)
+    %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}
+  end
+
+  # def machine_cycle(%Hardware{ppu: ppu, timer: timer} = hw) do
+  def hardware_cycle(hw) do
+    # oam
+    # ppu
+    ppu = Ppu.cycle(hw.ppu, hw.intr)
+    # timer
+    timer = Timer.cycle(hw.timer, hw.intr)
+    # Timer.cycle(hw.timer)
+    %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}
   end
 
 end

@@ -1,7 +1,7 @@
 defmodule Gameboy.Test.Frame do
   alias Gameboy.SimplePpu, as: Ppu
   # def run_frame(gb) when gb.hw.ppu.screen.ready, do: gb
-  def run_frame(gb) when gb.hw.counter >= 70224, do: gb
+  def run_frame(gb) when gb.hw.timer.counter >= 70224, do: gb
   def run_frame(gb), do: run_frame(Gameboy.step(gb))
   def run_frames_fps(gb, 0, fps_info), do: {gb, fps_info}
   def run_frames_fps(gb, n, fps_info) do
