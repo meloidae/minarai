@@ -9,9 +9,18 @@ defmodule Gameboy.Cartridge do
             ram: %{memory: struct(Memory), offset: 0x0}
 
   # @path "roms/Upwell.gb"
-  @path "roms/tests/blargg/cpu_instrs/individual/01-special.gb"
+  # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/01-special.gb"
+  @path "roms/tests/blargg/cpu_instrs/individual/02-interrupts.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/03-op sp,hl.gb"
-  # @path "roms/tests/mooneye-gb/acceptance/bits/reg_f.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/04-op r,imm.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/05-op rp.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/06-ld r,r.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/07-jr,jp,call,ret,rst.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/08-misc instrs.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/09-op r,r.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/10-bit ops.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/11-op a,(hl).gb"
   @cart_type 0x0147
   @rom_size 0x0148
   @ram_size 0x0149
@@ -36,6 +45,7 @@ defmodule Gameboy.Cartridge do
       x ->
         raise "cart_type = 0x#{Utils.to_hex(x)} is not implemented"
     end
+    IO.puts("Loading cartridge: mbc = #{inspect(mbc)}")
     rom = init_rom(memory)
     ram = init_ram(mbc, memory)
     %Cartridge{mbc: mbc, rom: rom, ram: ram}
@@ -142,7 +152,7 @@ defmodule Gameboy.Cartridge do
   end
 
   defp mbc1_set_control(%{mbc: mbc, rom: rom, ram: ram} = cart, addr, value) do
-    cond do
+    mbc = cond do
       addr <= 0x1fff -> # RAM enable
         # Any value with 0xa in lower 4 bit enables RAM
         put_in(cart.ram.is_enabled, value &&& 0x0a != 0)
@@ -155,11 +165,12 @@ defmodule Gameboy.Cartridge do
       addr <= 0x5fff -> # RAM bank number or upper bits of ROM bank number
         put_in(cart.mbc.bank2, value &&& @mbc1_bank2_mask)
         |> mbc1_set_bank()
-      addr <= 0x7fff -> # Banking mode select
+      true -> # Banking mode select
         mode = if (value &&& @mbc1_mode_mask) != 0, do: :advance_rom_or_ram_bank, else: :simple_rom_bank
         put_in(cart.mbc.mode, mode)
         |> mbc1_set_bank()
     end
+    Map.put(cart, :mbc, mbc)
   end
 
   defp mbc1_set_bank(%{mbc: mbc, rom: rom, ram: ram} = cart) do

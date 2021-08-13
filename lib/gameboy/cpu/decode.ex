@@ -23,7 +23,7 @@ defmodule Gameboy.Cpu.Decode do
         # end
       value ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
-        cpu = instruction(cpu.opcode, cpu, hw)
+        {cpu, hw} = instruction(cpu.opcode, cpu, hw)
         {%{cpu | ime: value, delayed_set_ime: nil}, hw}
     end
   end

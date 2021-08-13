@@ -40,7 +40,6 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
-  @display_enable 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   defstruct vram: struct(Memory),
             oam: struct(Memory),
             mode: :oam_search,
@@ -66,6 +65,27 @@ defmodule Gameboy.SimplePpu do
   @pixel_transfer_cycles 43
   @hblank_cycles 51
   @vblank_cycles 114
+
+  @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
+  @window_tile_map_addr_base 0..0xff |> Enum.map(fn x ->
+    if (x &&& (1 <<< 6)) != 0, do: 0x9c00, else: 0x9800
+  end)
+  |> List.to_tuple()
+  @window_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
+  @tile_data_addr_base 0..0xff |> Enum.map(fn x ->
+    if (x &&& (1 <<< 4)) != 0, do: 0x8000, else: 0x8800
+  end)
+  |> List.to_tuple()
+  @bg_tile_map_addr_base 0..0xff |> Enum.map(fn x ->
+    if (x &&& (1 <<< 3)) != 0, do: 0x9c00, else: 0x9800
+  end)
+  |> List.to_tuple()
+  @obj_size 0..0xff |> Enum.map(fn x ->
+    if (x &&& (1 <<< 2)) != 0, do: 16, else: 8
+  end)
+  |> List.to_tuple()
+  @obj_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 1)) != 0 end) |> List.to_tuple()
+  @bg_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
 
   def init do
     vram = Memory.init(@vram_size)
@@ -104,6 +124,8 @@ defmodule Gameboy.SimplePpu do
   defp read_range_vram(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr &&& @vram_mask, len)
 
   defp read_int_vram(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr &&& @vram_mask, size)
+
+  defp read_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read(vram, addr, size)
 
   def write_vram(%Ppu{mode: mode, vram: vram} = ppu, addr, value) do
     if mode == :pixel_transfer do
