@@ -34,6 +34,16 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
+  @vram_size 0x4000
+  @oam_size 0xa0
+  @vram_mask 0x1fff
+  @byte_mask 0xff
+
+  @oam_search_cycles 20
+  @pixel_transfer_cycles 43
+  @hblank_cycles 51
+  @vblank_cycles 114
+
   defstruct vram: struct(Memory),
             oam: struct(Memory),
             mode: :oam_search,
@@ -52,16 +62,6 @@ defmodule Gameboy.SimplePpu do
             obp1: 0x00,
             # screen: nil
             buffer: []
-
-  @vram_size 0x4000
-  @oam_size 0xa0
-  @vram_mask 0x1fff
-  @byte_mask 0xff
-
-  @oam_search_cycles 20
-  @pixel_transfer_cycles 43
-  @hblank_cycles 51
-  @vblank_cycles 114
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
@@ -244,8 +244,8 @@ defmodule Gameboy.SimplePpu do
           # ppu = draw_scanline(ppu)
           pixels = draw_scanline(ppu)
           if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
           # %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
+          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
@@ -326,6 +326,7 @@ defmodule Gameboy.SimplePpu do
   |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
   |> List.to_tuple()
 
+
   defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
     sprite_size = elem(@obj_size, lcdc)
     Memory.read_binary(oam, 0, @oam_size)
@@ -337,11 +338,12 @@ defmodule Gameboy.SimplePpu do
     end)
     |> Stream.with_index()
     |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
-      cond do
-        x0 < x1 -> true
-        x0 === x1 and i0 > i1 -> true
-        true -> false
-      end
+      # cond do
+      #   x0 < x1 -> true
+      #   x0 === x1 and i0 > i1 -> true
+      #   true -> false
+      # end
+      (x0 < x1) or (x0 === x1 and i0 > i1)
     end)
     |> Enum.reduce(%{}, fn {{y, x, tile_id, flags}, _}, acc ->
       palette = if elem(@palette_flag, flags), do: obp1, else: obp0
@@ -420,7 +422,7 @@ defmodule Gameboy.SimplePpu do
     off_color = elem(@off_color, ppu.bgp)
     # x coordinates on screen
     x_coords = -scx_offset..159
-         |> Stream.chunk_every(8)
+         |> Enum.chunk_every(8)
 
     if elem(@tile_data_addr, lcdc) do
       # 0x8000 address mode
@@ -428,7 +430,7 @@ defmodule Gameboy.SimplePpu do
       |> Stream.zip(x_coords)
       |> Enum.map(fn {tile_id, xs} -> 
         elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
-        |> Stream.zip(xs)
+        |> Enum.zip(xs)
         |> Enum.map(fn {p, x} -> 
           if x < 0 do
             []
@@ -454,7 +456,7 @@ defmodule Gameboy.SimplePpu do
       |> Stream.zip(x_coords)
       |> Enum.map(fn {tile_id, xs} ->
         elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
-        |> Stream.zip(xs)
+        |> Enum.zip(xs)
         |> Enum.map(fn {p, x} ->
           if x < 0 do
             []
