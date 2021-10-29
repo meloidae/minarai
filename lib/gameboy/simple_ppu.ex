@@ -244,8 +244,8 @@ defmodule Gameboy.SimplePpu do
           # ppu = draw_scanline(ppu)
           pixels = draw_scanline(ppu)
           if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
+          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
           # %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
-          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
@@ -391,17 +391,17 @@ defmodule Gameboy.SimplePpu do
   defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
 
   defp draw_scanline(ppu) do
-    # scanline(ppu)
+    scanline(ppu)
     # scanline_task(ppu.oam.data, ppu.vram.data, ppu.lcdc, ppu.ly, ppu.scy, ppu.scx, ppu.bgp, ppu.obp0, ppu.obp1)
-    MinaraiNif.scanline(ppu.vram.data,
-      ppu.oam.data,
-      ppu.lcdc,
-      ppu.ly,
-      ppu.scy,
-      ppu.scx,
-      ppu.bgp,
-      ppu.obp0,
-      ppu.obp1)
+    # MinaraiNif.scanline(ppu.vram.data,
+    #   ppu.oam.data,
+    #   ppu.lcdc,
+    #   ppu.ly,
+    #   ppu.scy,
+    #   ppu.scx,
+    #   ppu.bgp,
+    #   ppu.obp0,
+    #   ppu.obp1)
 
   end
 
