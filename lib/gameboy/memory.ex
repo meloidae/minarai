@@ -31,10 +31,19 @@ defmodule Gameboy.Memory do
     value
   end
 
+  def read_binary(%Memory{data: data} = _memory, addr, len) do
+    <<_first::binary-size(addr), value::binary-size(len), _rest::binary>> = data
+    value
+  end
 
   def write(%Memory{data: data} = memory, addr, value) do
     <<first::binary-size(addr), _::binary-size(1), rest::binary>> = data
     Map.put(memory, :data, first <> <<value>> <> rest)
+  end
+
+  def write_binary(%Memory{data: data} = memory, addr, value, len) do
+    <<first::binary-size(addr), _::binary-size(len), rest::binary>> = data
+    Map.put(memory, :data, first <> value <> rest)
   end
 
   def read_array(mem_array, bank, addr), do: read(mem_array[bank], addr)

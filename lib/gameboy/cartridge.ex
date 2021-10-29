@@ -9,9 +9,13 @@ defmodule Gameboy.Cartridge do
             ram: %{memory: struct(Memory), offset: 0x0}
 
   # @path "roms/Upwell.gb"
+  # @path "roms/flappyboy.gb"
+  # @path "roms/2048.gb"
+  # @path "roms/carazu.gb"
+  @path "roms/SIKAKUJOSIKBJ3J.gb"
   # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/01-special.gb"
-  @path "roms/tests/blargg/cpu_instrs/individual/02-interrupts.gb"
+  # @path "roms/tests/blargg/cpu_instrs/individual/02-interrupts.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/03-op sp,hl.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/04-op r,imm.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/05-op rp.gb"
@@ -21,6 +25,15 @@ defmodule Gameboy.Cartridge do
   # @path "roms/tests/blargg/cpu_instrs/individual/09-op r,r.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/10-bit ops.gb"
   # @path "roms/tests/blargg/cpu_instrs/individual/11-op a,(hl).gb"
+
+  # @path "roms/tests/mooneye-gb/acceptance/jp_timing.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/add_sp_e_timing.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/bits/reg_f.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/if_ie_registers.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/timer/div_write.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/timer/tima_reload.gb"
+  # @path "roms/tests/mooneye-gb/acceptance/boot_regs-dmg0.gb"
+
   @cart_type 0x0147
   @rom_size 0x0148
   @ram_size 0x0149
@@ -34,18 +47,26 @@ defmodule Gameboy.Cartridge do
   @mbc1_bank2_mask 0x03
   @mbc1_mode_mask 0x01
 
-  def init(path \\ @path) do
+  def init(path \\ nil) do
+    path = if is_nil(path) do
+      IO.puts("Using default cart path: #{@path}")
+      @path
+    else
+      IO.puts("Using cart path: #{path}")
+      path
+    end
+
     data = File.read!(path)
     memory = %Memory{data: data}
     mbc = case Memory.read(memory, @cart_type) do
       0x00 ->
         %{type: :nombc}
       x when 0x01 in [0x01, 0x02, 0x03] ->
-        %{type: :mbc1, mode: :simple_rom_bank, bank1: 0x01, bank2: 0x00, rom: {0x0000, 0x4000}, ram: 0x00}
+        %{type: :mbc1, mode: :simple_rom_bank, bank1: 0x01, bank2: 0x00, rom: {0x0000, 0x4000}, ram: 0x00, ram_enable: false}
       x ->
         raise "cart_type = 0x#{Utils.to_hex(x)} is not implemented"
     end
-    IO.puts("Loading cartridge: mbc = #{inspect(mbc)}")
+    IO.puts("Cartridge mbc: #{inspect(mbc)}")
     rom = init_rom(memory)
     ram = init_ram(mbc, memory)
     %Cartridge{mbc: mbc, rom: rom, ram: ram}
@@ -80,17 +101,18 @@ defmodule Gameboy.Cartridge do
     case Memory.read(rom_memory, @ram_size) do
       0x00 ->
         # mbc2 has internal ram even when rom_size is 0x00, but ignore that for now
+        # %{memory: Memory.init_memory_array(0x2000, 1), is_enabled: true}
         nil
       0x01 -> # 2kb ram
-        %{memory: Memory.init_memory_array(0x0800, 1), is_enabled: false}
+        %{memory: Memory.init_memory_array(0x0800, 1)}
       0x02 ->
-        %{memory: Memory.init_memory_array(@bank_size, 1), is_enabled: false}
+        %{memory: Memory.init_memory_array(@bank_size, 1)}
       0x03 ->
-        %{memory: Memory.init_memory_array(@bank_size, 4), is_enabled: false}
+        %{memory: Memory.init_memory_array(@bank_size, 4)}
       0x04 ->
-        %{memory: Memory.init_memory_array(@bank_size, 16), is_enabled: false}
+        %{memory: Memory.init_memory_array(@bank_size, 16)}
       0x05 ->
-        %{memory: Memory.init_memory_array(@bank_size, 8), is_enabled: false}
+        %{memory: Memory.init_memory_array(@bank_size, 8)}
     end
   end
 
@@ -116,6 +138,28 @@ defmodule Gameboy.Cartridge do
     end
   end
 
+  def read_binary_rom_low(%{mbc: mbc, rom: rom, ram: ram} = cart, addr, len) do
+    case mbc do
+      %{type: :nombc} -> # No Mbc, so just read from specified address
+        Memory.read_binary(rom.memory, addr, len)
+      %{type: :mbc1, rom: {low_offset, _high_offset}} ->
+        Memory.read_binary(rom.memory, low_offset ||| (addr &&& @bank_mask), len)
+      _ ->
+        raise "Read binary rom low for mbc #{inspect(mbc)} is unimplemented"
+    end
+  end
+
+  def read_binary_rom_high(%{mbc: mbc, rom: rom} = cart, addr, len) do
+    case mbc do
+      %{type: :nombc} -> # No Mbc, so just read from specified address
+        Memory.read_binary(rom.memory, addr, len)
+      %{type: :mbc1, rom: {_low_offset, high_offset}} ->
+        Memory.read_binary(rom.memory, high_offset ||| (addr &&& @bank_mask), len)
+      _ ->
+        raise "Read binary rom high for mbc #{inspect(mbc)} is unimplemented"
+    end
+  end
+
   def read_ram(%{mbc: mbc, ram: ram} = cart, addr) do
     case mbc do
       %{type: :nombc} ->
@@ -131,8 +175,8 @@ defmodule Gameboy.Cartridge do
     case mbc do
       %{type: :nombc} -> # How to enable write with no mbc?
         put_in(cart.ram.memory, Memory.write_array(ram.memory, 0x0, addr &&& @bank_mask, value))
-      %{type: :mbc1, ram: bank} ->
-        if cart.ram.is_enabled do
+      %{type: :mbc1, ram_enable: is_enabled, ram: bank} ->
+        if is_enabled do
           put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
         else # Don't modify if not enabled
           cart
@@ -155,7 +199,7 @@ defmodule Gameboy.Cartridge do
     mbc = cond do
       addr <= 0x1fff -> # RAM enable
         # Any value with 0xa in lower 4 bit enables RAM
-        put_in(cart.ram.is_enabled, value &&& 0x0a != 0)
+        Map.put(mbc, :ram_enable, (value &&& 0x0a) != 0)
       addr <= 0x3fff -> # ROM bank number
         bank1 = value &&& @mbc1_bank1_mask
         # If writing 0x00 is attempted, make it 0x01

@@ -51,12 +51,12 @@ defmodule Gameboy.Cpu do
 
   # handle interrupt TODO
   def handle_interrupt(cpu, hw) do
-    if cpu.ime do
-      case Interrupts.check(hw.intr) do
-        nil ->
-          # No interrupt is requested
-          {cpu, hw}
-        {addr, mask} ->
+    case Interrupts.check(hw.intr) do
+      nil ->
+        # No interrupt is requested
+        {cpu, hw}
+      {addr, mask} ->
+        if cpu.ime do
           # Add 8 cycles
           hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
           # Push value of pc on to stack
@@ -70,11 +70,15 @@ defmodule Gameboy.Cpu do
           # Acknowledge interrupt
           Interrupts.acknowledge(hw.intr, mask)
           # Change pc to address specified by interrupt and switch to running state
+          if cpu.state != :running do
+            IO.puts("Resume with jump")
+          end
           {%{cpu | pc: addr, sp: sp, state: :running}, hw}
-      end
-    else
-      # interrupt is not enabled
-      {cpu, hw}
+        else
+          # When ime is disabled, resume from halt without acknowledging interrupts
+          IO.puts("Resume no jump")
+          {Map.put(cpu, :state, :running), hw}
+        end
     end
   end
   # def handle_interrupt(gb) do
@@ -339,6 +343,7 @@ defmodule Gameboy.Cpu do
   def fetch_imm16(cpu, hw) do
     {low, cpu, hw} = fetch_imm8(cpu, hw)
     {high, cpu, hw} = fetch_imm8(cpu, hw)
+    # IO.puts("imm16 = low: #{Utils.to_hex(low)}, high: #{Utils.to_hex(high)}")
     value = ((high <<< 8) &&& 0xff00) ||| (low &&& 0x00ff)
     {value, cpu, hw}
   end

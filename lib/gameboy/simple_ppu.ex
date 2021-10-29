@@ -9,34 +9,28 @@ defmodule Gameboy.SimplePpu do
     @screen_width 160
     @screen_height 144
 
-    defstruct buffer: nil,
-              index: 0,
-              enabled: false,
-              ready: false
+    defstruct buffer: nil
+              # index: 0,
+              # enabled: false,
+              #ready: false
 
     # @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
     def init do
       # Buffer using iolist
       buffer = []
-      %Screen{buffer: buffer, ready: false}
+      # %Screen{buffer: buffer, ready: false}
+      %Screen{buffer: buffer}
     end
 
-    # Disable
-    def disable(screen), do: Map.put(screen, :enabled, false)
-    # Enable
-    def enable(screen), do: Map.put(screen, :enabled, true)
-
-    # Screen buffer using iolist
-    def write(%Screen{buffer: buffer} = screen, value) do
-      Map.put(screen, :buffer, [elem(@color, value) | buffer])
-    end
     def vblank(screen) do
-      send(Minarai, {:update, screen.buffer |> IO.iodata_to_binary()})
-      Map.put(screen, :ready, true)
+      # send(Minarai, {:update, screen.buffer |> IO.iodata_to_binary()})
+      # Map.put(screen, :ready, true)
+      screen
     end
     # def hblank(screen), do: Map.put(screen, :buffer, screen.buffer |> IO.iodata_to_binary())
     def flush(screen) do
-      %{screen | ready: false, buffer: []}
+      # %{screen | ready: false, buffer: []}
+      Map.put(screen, :buffer, [])
     end
   end
 
@@ -54,7 +48,10 @@ defmodule Gameboy.SimplePpu do
             wx: 0x00,
             wy: 0x00,
             bgp: 0x00,
-            screen: nil
+            obp0: 0x00,
+            obp1: 0x00,
+            # screen: nil
+            buffer: []
 
   @vram_size 0x4000
   @oam_size 0xa0
@@ -67,17 +64,15 @@ defmodule Gameboy.SimplePpu do
   @vblank_cycles 114
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
-  @window_tile_map_addr_base 0..0xff |> Enum.map(fn x ->
+  @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
     if (x &&& (1 <<< 6)) != 0, do: 0x9c00, else: 0x9800
   end)
   |> List.to_tuple()
   @window_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
-  @tile_data_addr_base 0..0xff |> Enum.map(fn x ->
-    if (x &&& (1 <<< 4)) != 0, do: 0x8000, else: 0x8800
-  end)
+  @tile_data_addr 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
   |> List.to_tuple()
-  @bg_tile_map_addr_base 0..0xff |> Enum.map(fn x ->
-    if (x &&& (1 <<< 3)) != 0, do: 0x9c00, else: 0x9800
+  @bg_tile_map_addr 0..0xff |> Enum.map(fn x ->
+    if (x &&& (1 <<< 3)) != 0, do: 0x1c00, else: 0x1800
   end)
   |> List.to_tuple()
   @obj_size 0..0xff |> Enum.map(fn x ->
@@ -90,8 +85,9 @@ defmodule Gameboy.SimplePpu do
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    screen = Screen.init()
-    %Ppu{vram: vram, oam: oam, counter: 0, screen: screen}
+    # screen = Screen.init()
+    # %Ppu{vram: vram, oam: oam, counter: 0, screen: screen}
+    %Ppu{vram: vram, oam: oam, counter: 0}
   end
 
   def read_oam(%Ppu{mode: mode, oam: oam} = _ppu, addr) do
@@ -112,6 +108,10 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
+  defp write_binary_oam(%Ppu{oam: oam} = ppu, addr, value, len) do
+    Map.put(ppu, :oam, Memory.write_binary(oam, addr, value, len))
+  end
+
   def read_vram(%Ppu{mode: mode, vram: vram} = _ppu, addr) do
     if mode == :pixel_transfer do
       # vram is not accessible during pixel transfer (mode 3)
@@ -121,11 +121,17 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
+  def read_binary_vram(%Ppu{vram: vram} = _ppu, addr, len) do
+    Memory.read_binary(vram, addr &&& @vram_mask, len)
+  end
+
   defp read_range_vram(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr &&& @vram_mask, len)
 
   defp read_int_vram(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr &&& @vram_mask, size)
 
-  defp read_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read(vram, addr, size)
+  defp read_vram_no_mask(%Ppu{vram: vram} = _ppu, addr), do: Memory.read(vram, addr)
+  defp read_range_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr, len)
+  defp read_int_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr, size)
 
   def write_vram(%Ppu{mode: mode, vram: vram} = ppu, addr, value) do
     if mode == :pixel_transfer do
@@ -179,6 +185,11 @@ defmodule Gameboy.SimplePpu do
 
   def set_bg_palette(%Ppu{} = ppu, value), do: Map.put(ppu, :bgp, value &&& 0xff)
 
+  def ob_palette0(ppu), do: ppu.obp0
+  def set_ob_palette0(ppu, value), do: Map.put(ppu, :obp0, value)
+  def ob_palette1(ppu), do: ppu.obp1
+  def set_ob_palette1(ppu, value), do: Map.put(ppu, :obp0, value)
+
   def scroll_y(%Ppu{scy: scy} = _ppu), do: scy
   def set_scroll_y(%Ppu{} = ppu, value), do: Map.put(ppu, :scy, value &&& 0xff)
 
@@ -198,6 +209,11 @@ defmodule Gameboy.SimplePpu do
   def window_y(%Ppu{wy: wy} = _ppu), do: wy
   def set_window_y(%Ppu{} = ppu, value), do: Map.put(ppu, :wy, value &&& 0xff)
 
+  # Instantaneous transfer for now
+  def oam_dma_transfer(ppu, data, size) do
+    write_binary_oam(ppu, 0x00, data, size)
+  end
+
   @lyc_stat 0..0xff
   |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
   |> List.to_tuple()
@@ -212,8 +228,7 @@ defmodule Gameboy.SimplePpu do
   |> List.to_tuple()
 
   def cycle(ppu, intr) do
-    enabled = elem(@display_enable, ppu.lcdc)
-    if enabled, do: do_cycle(ppu, intr), else: ppu
+    if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu, intr), else: ppu
   end
 
   defp do_cycle(ppu, intr) do
@@ -226,16 +241,20 @@ defmodule Gameboy.SimplePpu do
           %{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}
         :pixel_transfer ->
           # Draw line
-          ppu = draw_scanline(ppu)
+          # ppu = draw_scanline(ppu)
+          pixels = draw_scanline(ppu)
           if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-          %{ppu | mode: :hblank, counter: @hblank_cycles}
+          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
+          # %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
             Interrupts.request(intr, :vblank)
             if elem(@vblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly, screen: Screen.vblank(ppu.screen)}
+            # %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly, screen: Screen.vblank(ppu.screen)}
+            vblank(ppu)
+            %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}
           else
             if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
@@ -246,7 +265,8 @@ defmodule Gameboy.SimplePpu do
           if new_ly == 153 do
             if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, screen: Screen.flush(ppu.screen)}
+            # %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, screen: Screen.flush(ppu.screen)}
+            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}
           else
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
             %{ppu | counter: @vblank_cycles, ly: new_ly}
@@ -268,28 +288,199 @@ defmodule Gameboy.SimplePpu do
   end)
   |> List.to_tuple()
 
+  @tile_bytes_rev 0..0xffff
+  |> Enum.map(fn x ->
+    <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
+      l4::size(1), l5::size(1), l6::size(1), l7::size(1),
+      h0::size(1), h1::size(1), h2::size(1), h3::size(1),
+      h4::size(1), h5::size(1), h6::size(1), h7::size(1)>> = <<x::integer-size(16)>>
+    [(h7 <<< 1) ||| l7, (h6 <<< 1) ||| l6, (h5 <<< 1) ||| l5, (h4 <<< 1) ||| l4,
+     (h3 <<< 1) ||| l3, (h2 <<< 1) ||| l2, (h1 <<< 1) ||| l1, (h0 <<< 1) ||| l0]
+  end)
+  |> List.to_tuple()
+
   @tiles_per_row 20
-  @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
-  defp draw_scanline(ppu) do
-    y = ppu.scy + ppu.ly
-    tile_line = rem(y, 8) * 2
-    row_addr = 0x9800 + (div(y, 8) * 32)
-    tile_index = 0
-    # Fetch all tile ids for this row
-    pixels = read_range_vram(ppu, row_addr + tile_index, @tiles_per_row)
-    |> Enum.map(fn tile_id ->
-      elem(@tile_bytes, read_int_vram(ppu, 0x8000 + (tile_id * 16) + tile_line, 16))
-      |> Enum.map(fn p -> elem(@color, (ppu.bgp >>> (p * 2)) &&& 0x3) end)
+  # @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
+  @color {<<0xe0, 0xf0, 0xe7>>, <<0x8b, 0xa3, 0x94>>, <<0x55, 0x64, 0x5a>>, <<0x34, 0x3d, 0x37>>}
+  @tile_id_8800 0..0xff
+  |> Enum.map(fn x -> if x < 0x80, do: x, else: x - 256 end)
+  |> List.to_tuple()
+
+  @off_color 0..0xff
+  |> Enum.map(fn x -> (x &&& 0x03) end)
+  |> List.to_tuple()
+
+  @prioritize_bg 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end)
+  |> List.to_tuple()
+
+  @flip_y 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
+  |> List.to_tuple()
+
+  @flip_x 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
+  |> List.to_tuple()
+
+  @palette_flag 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
+  |> List.to_tuple()
+
+  defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
+    sprite_size = elem(@obj_size, lcdc)
+    Memory.read_binary(oam, 0, @oam_size)
+    |> chunk([])
+    |> Stream.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
+    |> Stream.take(10)
+    |> Stream.filter(fn {_, x, _, _} ->
+      x > 0 and x < 168
     end)
-    put_in(ppu.screen.buffer, [ppu.screen.buffer | pixels])
-    # palette_color = (ppu.bgp >>> (pixel * 2)) &&& 0x3
-    # tile_id = read_vram(ppu, row_addr + tile_index)
-    # addr = 0x8000 + (tile_id * 16) + (tile_line * 2)
+    |> Stream.with_index()
+    |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
+      cond do
+        x0 < x1 -> true
+        x0 === x1 and i0 > i1 -> true
+        true -> false
+      end
+    end)
+    |> Enum.reduce(%{}, fn {{y, x, tile_id, flags}, _}, acc ->
+      palette = if elem(@palette_flag, flags), do: obp1, else: obp0
+      off_color = elem(@off_color, palette)
+      prioritize_bg = elem(@prioritize_bg, flags)
+      # Vertical flip
+      line = if elem(@flip_y, flags) do
+        sprite_size - ((ly - y + 16) &&& 0xff) - 1
+      else
+        (ly - y + 16) &&& 0xff
+      end
+      # If line >= 8, get pixels from the next tile (this can happen when sprite_size == 16)
+      {line, tile_id} = if line >= 8, do: {line - 8, tile_id + 1}, else: {line, tile_id}
+      # Horizontal flip
+      if elem(@flip_x, flags) do
+        elem(@tile_bytes_rev, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
+      else
+        elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
+      end
+      |> Stream.with_index()
+      |> Enum.reduce(acc, fn {p, i}, m ->
+        color = (palette >>> (p * 2)) &&& 0x3
+        if color === off_color do
+          m
+        else
+          Map.put(m, x + i + 8, {color, prioritize_bg})
+        end
+      end)
+    end)
   end
 
-  def screen_buffer(%Ppu{screen: screen} = _ppu), do: screen.buffer |> IO.iodata_to_binary()
-  def flush_screen_buffer(%Ppu{screen: screen} = ppu) do
-    Map.put(ppu, :screen, Screen.flush(screen))
+  defp sprite_chunks(<<>>, _count, _size, _ly, sprites), do: sprites
+  defp sprite_chunks(_, 10, _size, _ly, sprites), do: sprites
+  defp sprite_chunks(<<h::binary-size(4), rest::binary>>, count, ly, size, sprites) do
+    <<y, _::binary>> = h
+    if ((ly - y + 16) &&& 0xff) < size do
+      sprite_chunks(rest, count + 1, ly, size, [h | sprites])
+    else
+      sprite_chunks(rest, count, ly, size, sprites)
+    end
   end
 
+  defp chunk(<<>>, acc), do: Enum.reverse(acc)
+  # defp chunk(<<h::binary-size(4), rest::binary>>, acc), do: chunk(rest, [h | acc])
+  defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
+
+  defp draw_scanline(ppu) do
+    # scanline(ppu)
+    # scanline_task(ppu.oam.data, ppu.vram.data, ppu.lcdc, ppu.ly, ppu.scy, ppu.scx, ppu.bgp, ppu.obp0, ppu.obp1)
+    MinaraiNif.scanline(ppu.vram.data,
+      ppu.oam.data,
+      ppu.lcdc,
+      ppu.ly,
+      ppu.scy,
+      ppu.scx,
+      ppu.bgp,
+      ppu.obp0,
+      ppu.obp1)
+
+  end
+
+  defp scanline(ppu) do
+    sprites = get_sprite_map(ppu)
+    sprites_set = Map.keys(sprites)
+                  |> MapSet.new()
+
+    lcdc = ppu.lcdc
+    y = ppu.scy + ppu.ly
+
+    # Render background
+    tile_line = rem(y, 8) * 2
+    row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
+    tile_index = div(ppu.scx, 8) &&& 0x1f
+    scx_offset = rem(ppu.scx, 8)
+    num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
+    off_color = elem(@off_color, ppu.bgp)
+    # x coordinates on screen
+    x_coords = -scx_offset..159
+         |> Stream.chunk_every(8)
+
+    if elem(@tile_data_addr, lcdc) do
+      # 0x8000 address mode
+      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+      |> Stream.zip(x_coords)
+      |> Enum.map(fn {tile_id, xs} -> 
+        elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
+        |> Stream.zip(xs)
+        |> Enum.map(fn {p, x} -> 
+          if x < 0 do
+            []
+          else
+            if MapSet.member?(sprites_set, x) do
+              case sprites do
+                %{^x => {sp, true}} ->
+                  bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                  if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+                %{^x => {sp, _}} ->
+                  elem(@color, sp)
+              end
+            else
+              bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+              elem(@color, bg_pixel)
+            end
+          end
+        end)
+      end)
+    else
+      # 0x8800 address mode
+      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+      |> Stream.zip(x_coords)
+      |> Enum.map(fn {tile_id, xs} ->
+        elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
+        |> Stream.zip(xs)
+        |> Enum.map(fn {p, x} ->
+          if x < 0 do
+            []
+          else
+            if MapSet.member?(sprites_set, x) do
+              case sprites do
+                %{^x => {sp, true}} ->
+                  bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                  if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+                %{^x => {sp, _}} ->
+                  elem(@color, sp)
+              end
+            else
+              bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+              elem(@color, bg_pixel)
+            end
+          end
+        end)
+      end)
+    end
+  end
+
+  defp vblank(ppu) do
+    # sprites = Task.await_many(ppu.sprites)
+    # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
+    data = ppu.buffer |> IO.iodata_to_binary()
+    send(Minarai, {:update, data})
+  end
 end

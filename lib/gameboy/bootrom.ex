@@ -8,7 +8,14 @@ defmodule Gameboy.Bootrom do
   @path "roms/DMG_ROM.bin"
   # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 
-  def init(path \\ @path) do
+  def init(path \\ nil) do
+    path = if is_nil(path) do
+      IO.puts("Using default bootrom path: #{@path}")
+      @path
+    else
+      IO.puts("Using bootrom path: #{path}")
+      path
+    end
     data = File.read!(path)
     %Bootrom{memory: %Memory{data: data}, active: true}
     # %Bootrom{memory: EtsMemory.init_from_binary(:bootrom, data), active: true}

@@ -19,6 +19,14 @@ defmodule Gameboy.Wram do
     Memory.read(memory, offset ||| (addr &&& @wram_mask))
   end
 
+  def read_binary_low(%Wram{memory: memory} = wram, addr, len) do
+    Memory.read_binary(memory, addr &&& @wram_mask, len)
+  end
+
+  def read_binary_high(%Wram{memory: memory, offset: offset} = wram, addr, len) do
+    Memory.read_binary(memory, offset ||| (addr &&& @wram_mask), len)
+  end
+
   def write_low(%Wram{memory: memory} = wram, addr, value) do
     Map.put(wram, :memory, Memory.write(memory, addr &&& @wram_mask, value))
   end

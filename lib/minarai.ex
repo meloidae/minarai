@@ -2,7 +2,7 @@ defmodule Minarai do
   @behaviour :wx_object
   use Bitwise
 
-  @title 'Elixir OpenGL'
+  @title 'Minarai'
   @width 160
   @height 144
   @scale 4
@@ -11,7 +11,7 @@ defmodule Minarai do
   #######
   # API #
   #######
-  def start_link() do
+  def start_link(opts \\ []) do
     window = :wx_object.start_link(__MODULE__, [], [])
     pid = :wx_object.get_pid(window)
     Process.register(pid, __MODULE__)
@@ -20,8 +20,8 @@ defmodule Minarai do
   #################################
   # :wx_object behavior callbacks #
   #################################
-  def init(config) do
-    wx = :wx.new(config)
+  def init(opts) do
+    wx = :wx.new(opts)
     frame = :wxFrame.new(wx, :wx_const.wx_id_any, @title, [{:size, @size}])
     :wxWindow.connect(frame, :close_window)
     :wxFrame.show(frame)
@@ -39,20 +39,18 @@ defmodule Minarai do
     :wxGLCanvas.connect(canvas, :size)
     :wxWindow.reparent(canvas, frame)
     :wxGLCanvas.setCurrent(canvas, ctx)
+    :wxFrame.connect(canvas, :key_down)
     setup_gl(canvas)
     buffer = generate_binary()
     :gl.enable(:gl_const.gl_texture_2d)
     texture = load_texture(buffer)
 
-    # Periodically send a message to trigger a redraw of the scene
-    # timer = :timer.send_interval(trunc(1_000 / 59.73), self(), :update)
-    # timer = :timer.send_interval(10, self(), :update)
     state = %{
       canvas: canvas,
       # timer: timer,
       texture: texture,
       buffer: buffer,
-      pid: spawn_link(fn -> Gameboy.debug_start() end),
+      pid: spawn_link(fn -> Gameboy.debug_start(opts) end),
       count: 0.0,
       prev_time: nil,
       fps: nil,
@@ -116,6 +114,27 @@ defmodule Minarai do
     end
     {:noreply, state}
   end
+
+  @enter 13
+  def handle_event({:wx, _, _, _,
+    {:wxKey, :key_down, _x, _y, @enter, _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+  }, state) do
+    pid = state.pid
+    send(pid, :step)
+    {:noreply, state}
+  end
+
+  def handle_event({:wx, _, _, _, _} = msg, state) do
+    # cond do
+    #   elem(event, 0) == :wxKey ->
+    #     IO.puts("#{inspect(event)}")
+    #   true ->
+    #     nil
+    # end
+    IO.puts("#{inspect(msg)}")
+    {:noreply, state}
+  end
+
 
   def terminate(_reason, state) do
     :wxGLCanvas.destroy(state.canvas)
@@ -224,21 +243,22 @@ defmodule Minarai do
   end
 
   defp draw_texture(x, y, %{tex_id: tex_id, w: w, h: h, minx: minx, miny: miny, maxx: maxx, maxy: maxy}) do
-    # :gl.clear(Bitwise.bor(:gl_const.gl_color_buffer_bit, :gl_const.gl_depth_buffer_bit))
+    :gl.clear(Bitwise.bor(:gl_const.gl_color_buffer_bit, :gl_const.gl_depth_buffer_bit))
     :gl.loadIdentity()
     :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
     :gl.scalef(@scale / 0.5, @scale / 0.5, 0.0)
     :gl.'begin'(:gl_const.gl_triangle_strip)
-    :gl.texCoord2f(minx, miny)
+    :gl.texCoord2f(0.0, 0.0)
+    # :gl.texCoord2f(0.0, 1.0)
     :gl.vertex2i(x, y)
-    # :gl.texCoord2f(maxx, miny)
-    :gl.texCoord2f(1.0, miny)
+    :gl.texCoord2f(1.0, 0.0)
+    # :gl.texCoord2f(1.0, 1.0)
     :gl.vertex2i(x + div(w, 2), y)
-    # :gl.texCoord2f(minx, maxy)
-    :gl.texCoord2f(minx, 1.0)
+    :gl.texCoord2f(0.0, 1.0)
+    # :gl.texCoord2f(0.0, 0.0)
     :gl.vertex2i(x, y + div(h, 2))
-    # :gl.texCoord2f(maxx, maxy)
     :gl.texCoord2f(1.0, 1.0)
+    # :gl.texCoord2f(1.0, 0.0)
     :gl.vertex2i(x + div(w, 2), y + div(h, 2))
     :gl.'end'()
     :ok

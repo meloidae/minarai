@@ -2,6 +2,7 @@ defmodule Gameboy.Cpu.Execute do
   use Bitwise
   alias Gameboy.Cpu
   alias Gameboy.Hardware
+  alias Gameboy.Interrupts
   alias Gameboy.Utils
 
   # 8 bit load
@@ -317,7 +318,14 @@ defmodule Gameboy.Cpu.Execute do
   # TODO
   # Enter halt state unless it's a halt bug
   def halt(%Cpu{} = cpu, hw) do
-    {cpu, hw}
+    cond do
+      cpu.ime ->
+        {Map.put(cpu, :state, :halt), hw}
+      !is_nil(Interrupts.check(hw.intr)) ->
+        {Map.put(cpu, :state, :halt), hw}
+      true ->
+        {Map.put(cpu, :state, :haltbug), hw}
+    end
   end
 
   # STOP

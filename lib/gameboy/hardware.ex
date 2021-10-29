@@ -12,6 +12,7 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Timer
   alias Gameboy.Interrupts
   alias Gameboy.Serial
+  alias Gameboy.Dma
   alias Gameboy.Utils
 
   defstruct bootrom: struct(Bootrom),
@@ -22,35 +23,57 @@ defmodule Gameboy.Hardware do
             apu: struct(Apu),
             timer: struct(Timer),
             intr: nil,
+            dma: nil,
             serial: struct(Serial),
             counter: 0
 
   @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
   @low_addr 0..0xffff |> Enum.map(fn x -> x &&& 0xff end) |> List.to_tuple()
 
-  def synced_read(hw, addr) do
-    Hardware.read(hw, addr)
-  end
+  # def synced_read(hw, addr) do
+  #   Hardware.read(hw, addr)
+  # end
   def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 ||| addr)
-  def synced_write(hw, addr, data) do
-    # IO.puts("synced_write: addr = #{Utils.to_hex(addr)}")
-    Hardware.write(hw, addr, data)
-  end
+  # def synced_write(hw, addr, data) do
+  #   # IO.puts("synced_write: addr = #{Utils.to_hex(addr)}")
+  #   Hardware.write(hw, addr, data)
+  # end
   def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 ||| addr, data)
   def sync_cycle(hw) do
-    hardware_cycle(hw)
+    Hardware.cycle(hw)
   end
 
-  def init() do
-    bootrom = Bootrom.init()
-    cart = Cartridge.init()
+  def init(opts \\ []) do
+    bootrom = case Access.fetch(opts, :bootrom) do
+      {:ok, path} ->
+        Bootrom.init(path)
+      _ ->
+        Bootrom.init()
+    end
+    cart = case Access.fetch(opts, :cart) do
+      {:ok, path} ->
+        Cartridge.init(path)
+      _ ->
+        Cartridge.init()
+    end
     ppu = Ppu.init()
     wram = Wram.init()
     hram = Hram.init()
     apu = Apu.init()
     timer = Timer.init()
     intr = Interrupts.init()
-    %Hardware{bootrom: bootrom, cart: cart, ppu: ppu, wram: wram, hram: hram, apu: apu, timer: timer, intr: intr}
+    dma = Dma.init()
+    %Hardware{
+      bootrom: bootrom,
+      cart: cart,
+      ppu: ppu,
+      wram: wram,
+      hram: hram,
+      apu: apu,
+      timer: timer,
+      intr: intr,
+      dma: dma
+    }
   end
 
   defp _read(hw, addr, 0x00) when hw.bootrom.active do
@@ -72,7 +95,7 @@ defmodule Gameboy.Hardware do
         end
       high <= 0xbf ->
         defp _read(hw, addr, unquote(high)) do
-          raise "Read from ram at #{Utils.to_hex(addr)} is unimplemented"
+          memory_cycle(hw, fn hw -> {Cartridge.read_ram(hw.cart, addr), hw} end)
         end
       high <= 0xcf ->
         defp _read(hw, addr, unquote(high)) do
@@ -108,7 +131,7 @@ defmodule Gameboy.Hardware do
     end
   end
 
-  def read(hw, addr) do
+  def synced_read(hw, addr) do
     high_addr = elem(@high_addr, addr)
     # high_addr = (addr >>> 8) &&& 0xff
     _read(hw, addr, high_addr)
@@ -182,11 +205,11 @@ defmodule Gameboy.Hardware do
         end
       0x48 ->
         defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
+          memory_cycle(hw, fn hw -> {Ppu.ob_palette0(hw.ppu), hw} end)
         end
       0x49 ->
         defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from ppu obj palette1 at #{Utils.to_hex(addr)} is unimplemented"
+          memory_cycle(hw, fn hw -> {Ppu.ob_palette1(hw.ppu), hw} end)
         end
       0x4a ->
         defp _read_ff(hw, _addr, unquote(low)) do
@@ -214,7 +237,8 @@ defmodule Gameboy.Hardware do
         end
       _ ->
         defp _read_ff(hw, addr, unquote(low)) do
-          raise "Read from #{Utils.to_hex(addr)} is unimplemented"
+          IO.warn("Read from #{Utils.to_hex(addr)} is not supported")
+          {0xff, cycle(hw)}
         end
     end
   end
@@ -226,9 +250,9 @@ defmodule Gameboy.Hardware do
   end
 
 
-  defp _write(hw, addr, value, 0x00) when hw.bootrom.active do
-    memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
-  end
+  # defp _write(hw, addr, value, 0x00) when hw.bootrom.active do
+  #   memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
+  # end
 
   for high <- 0..0xff do
     cond do
@@ -242,7 +266,7 @@ defmodule Gameboy.Hardware do
         end
       high <= 0xbf ->
         defp _write(hw, addr, value, unquote(high)) do
-          raise "Write to ram at #{Utils.to_hex(addr)} is unimplemented"
+          memory_cycle(hw, fn hw -> Map.put(hw, :cart, Cartridge.write_ram(hw.cart, addr, value)) end)
         end
       high <= 0xcf ->
         defp _write(hw, addr, value, unquote(high)) do
@@ -267,8 +291,10 @@ defmodule Gameboy.Hardware do
             # oam
             memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_oam(hw.ppu, low, value)) end)
           else
-            # unusable memory
-            raise "Write to unusable memory at #{Utils.to_hex(addr)}"
+            # Ignore write to unsuable address and issue warning
+            # Maybe implement oam corruption bug?
+            IO.warn("Write to unsuable address #{Utils.to_hex(addr)}")
+            cycle(hw)
           end
         end
       true -> #0xff
@@ -279,7 +305,7 @@ defmodule Gameboy.Hardware do
     end
   end
 
-  def write(hw, addr, value) do
+  def synced_write(hw, addr, value) do
     high_addr = elem(@high_addr, addr)
     # high_addr = (addr >>> 8) &&& 0xff
     # IO.puts("write: addr = #{Utils.to_hex(addr)}")
@@ -312,7 +338,7 @@ defmodule Gameboy.Hardware do
       0x40 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_control(hw.ppu, value)) end)
       0x41 ->
-        raise "Write to ppu lcd status at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_status(hw.ppu, value)) end)
       0x42 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_scroll_y(hw.ppu, value)) end)
       0x43 ->
@@ -322,13 +348,13 @@ defmodule Gameboy.Hardware do
       0x45 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_line_y_compare(hw.ppu, value)) end)
       0x46 ->
-        raise "Write to oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :dma, Dma.request(hw.dma, value)) end)
       0x47 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_bg_palette(hw.ppu, value)) end)
       0x48 ->
-        raise "Write to ppu obj palette0 at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_ob_palette0(hw.ppu, value)) end)
       0x49 ->
-        raise "Write to ppu obj palette1 at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_ob_palette1(hw.ppu, value)) end)
       0x4a ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_window_y(hw.ppu, value)) end)
       0x4b ->
@@ -348,42 +374,99 @@ defmodule Gameboy.Hardware do
       x when 0x30 <= x and x <= 0x3f ->
         memory_cycle(hw, fn hw -> Map.put(hw, :apu, Apu.write(hw.apu, addr, value)) end)
       _ ->
-        raise "Write to #{Utils.to_hex(addr)} is unimplemented"
+        IO.warn("Write to #{Utils.to_hex(addr)} is not supported")
+        cycle(hw)
     end
   end
 
+  for high <- 0..0xdf do
+    cond do
+      high <= 0x3f ->
+        defp dma_read(hw, addr, unquote(high)) do
+          Cartridge.read_binary_rom_low(hw.cart, addr, 0xa0)
+        end
+      high <= 0x7f ->
+        defp dma_read(hw, addr, unquote(high)) do
+          Cartridge.read_binary_rom_high(hw.cart, addr, 0xa0)
+        end
+      high <= 0x9f ->
+        defp dma_read(hw, addr, unquote(high)) do
+          Ppu.read_binary_vram(hw.ppu, addr, 0xa0)
+        end
+      high <= 0xbf ->
+        defp dma_read(hw, addr, unquote(high)) do
+          raise "dma read from ram at #{Utils.to_hex(addr)} is unimplemented"
+        end
+      high <= 0xcf ->
+        defp dma_read(hw, addr, unquote(high)) do
+          Wram.read_binary_low(hw.wram, addr, 0xa0)
+        end
+      high <= 0xdf ->
+        defp dma_read(hw, addr, unquote(high)) do
+          Wram.read_binary_high(hw.wram, addr, 0xa0)
+        end
+    end
+  end
+
+  defp dma_read(_hw, addr, _high) do
+    raise "dma read from #{Utils.to_hex(addr)} is not supported"
+  end
+
   def memory_cycle(hw, memory_fn) do
-    hw = hardware_cycle(hw)
+    hw = cycle(hw)
     memory_fn.(hw)
   end
 
   defp timer_read_cycle(hw, timer_fn) do
     # oam
+    {ppu, dma} = if hw.dma.requested do
+      dma = Dma.acknowledge_request(hw.dma)
+      addr = Dma.address(dma)
+      data = dma_read(hw, addr, elem(@high_addr, addr))
+      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
+    else
+      {hw.ppu, hw.dma}
+    end
     # ppu
-    ppu = Ppu.cycle(hw.ppu, hw.intr)
+    ppu = Ppu.cycle(ppu, hw.intr)
     # timer
     {value, timer} = timer_fn.(hw.timer, hw.intr)
-    {value, %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}}
+    {value, %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}}
   end
 
   defp timer_write_cycle(hw, timer_fn) do
     # oam
+    {ppu, dma} = if hw.dma.requested do
+      dma = Dma.acknowledge_request(hw.dma)
+      addr = Dma.address(dma)
+      data = dma_read(hw, addr, elem(@high_addr, addr))
+      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
+    else
+      {hw.ppu, hw.dma}
+    end
     # ppu
-    ppu = Ppu.cycle(hw.ppu, hw.intr)
+    ppu = Ppu.cycle(ppu, hw.intr)
     # timer
     timer = timer_fn.(hw.timer, hw.intr)
-    %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}
+    %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}
   end
 
   # def machine_cycle(%Hardware{ppu: ppu, timer: timer} = hw) do
-  def hardware_cycle(hw) do
+  def cycle(hw) do
     # oam
+    {ppu, dma} = if hw.dma.requested do
+      dma = Dma.acknowledge_request(hw.dma)
+      addr = Dma.address(dma)
+      data = dma_read(hw, addr, elem(@high_addr, addr))
+      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
+    else
+      {hw.ppu, hw.dma}
+    end
     # ppu
-    ppu = Ppu.cycle(hw.ppu, hw.intr)
+    ppu = Ppu.cycle(ppu, hw.intr)
     # timer
     timer = Timer.cycle(hw.timer, hw.intr)
-    # Timer.cycle(hw.timer)
-    %{hw | ppu: ppu, timer: timer, counter: hw.counter + 4}
+    %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}
   end
 
 end
