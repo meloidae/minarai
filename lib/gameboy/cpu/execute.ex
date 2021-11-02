@@ -564,9 +564,10 @@ defmodule Gameboy.Cpu.Execute do
   # 16 cycles
   # Do return and enable interrupts right away (not delayed like EI)
   def reti(%Cpu{} = cpu, hw) do
-    cpu = Map.put(cpu, :ime, true)
+    # cpu = Map.put(cpu, :ime, true)
     {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
-    cpu = Map.put(cpu, :sp, addr)
+    # cpu = Map.put(cpu, :pc, addr)
+    cpu = %{cpu | pc: addr, ime: true}
     {cpu, Hardware.sync_cycle(hw)}
   end
 

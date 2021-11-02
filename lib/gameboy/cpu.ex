@@ -56,28 +56,32 @@ defmodule Gameboy.Cpu do
         # No interrupt is requested
         {cpu, hw}
       {addr, mask} ->
-        if cpu.ime do
-          # Add 8 cycles
-          hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
-          # Push value of pc on to stack
-          pc = cpu.pc
-          low = pc &&& 0xff
-          high = pc >>> 8
-          sp = (cpu.sp - 1) &&& 0xffff
-          hw = Hardware.synced_write(hw, sp, high)
-          sp = (sp - 1) &&& 0xffff
-          hw = Hardware.synced_write(hw, sp, low)
-          # Acknowledge interrupt
-          Interrupts.acknowledge(hw.intr, mask)
-          # Change pc to address specified by interrupt and switch to running state
-          if cpu.state != :running do
-            IO.puts("Resume with jump")
-          end
-          {%{cpu | pc: addr, sp: sp, state: :running}, hw}
-        else
-          # When ime is disabled, resume from halt without acknowledging interrupts
-          # IO.puts("Resume no jump")
-          {Map.put(cpu, :state, :running), hw}
+        cond do
+          cpu.ime ->
+            # Add 8 cycles
+            hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
+            # Push value of pc on to stack
+            pc = cpu.pc
+            low = pc &&& 0xff
+            high = pc >>> 8
+            sp = (cpu.sp - 1) &&& 0xffff
+            hw = Hardware.synced_write(hw, sp, high)
+            sp = (sp - 1) &&& 0xffff
+            hw = Hardware.synced_write(hw, sp, low)
+            # Acknowledge interrupt
+            Interrupts.acknowledge(hw.intr, mask)
+            # Change pc to address specified by interrupt and switch to running state
+            if cpu.state != :running do
+              IO.puts("Resume with jump")
+            end
+            {%{cpu | pc: addr, sp: sp, state: :running}, hw}
+          cpu.state != :haltbug ->
+            # When ime is disabled, resume from halt without acknowledging interrupts
+            # IO.puts("Resume no jump")
+            {Map.put(cpu, :state, :running), hw}
+          true ->
+            # halt bug
+            {cpu, hw}
         end
     end
   end
