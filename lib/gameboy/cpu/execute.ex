@@ -163,9 +163,11 @@ defmodule Gameboy.Cpu.Execute do
   def inc(%Cpu{} = cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {sum, _carry, half_carry} = Cpu.add_u8_byte_carry(value, 1)
-    Cpu.set_flag(cpu, :z, sum == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, half_carry)
+    # Cpu.set_flag(cpu, :z, sum == 0)
+    # |> Cpu.set_flag(:n, false)
+    # |> Cpu.set_flag(:h, half_carry)
+    # |> Cpu.write(dst, hw, sum)
+    Cpu.set_flags(cpu, [{:z, sum == 0}, {:n, false}, {:h, half_carry}])
     |> Cpu.write(dst, hw, sum)
   end
 
@@ -173,9 +175,10 @@ defmodule Gameboy.Cpu.Execute do
   def dec(%Cpu{} = cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {diff, _carry, half_carry} = Cpu.sub_u8_byte_carry(value, 1)
-    Cpu.set_flag(cpu, :z, diff == 0)
-    |> Cpu.set_flag(:n, true)
-    |> Cpu.set_flag(:h, half_carry)
+    # Cpu.set_flag(cpu, :z, diff == 0)
+    # |> Cpu.set_flag(:n, true)
+    # |> Cpu.set_flag(:h, half_carry)
+    Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}])
     |> Cpu.write(dst, hw, diff)
   end
 
@@ -389,6 +392,27 @@ defmodule Gameboy.Cpu.Execute do
   # 2-byte opcode (+ 4 cycles)
   # shift right, msb is set to 0
   def srl(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.srl_u8_byte_carry/2)
+
+  # Special shifts RLCA, RLA, RRCA and RRA always resets Z flag
+  def _shift_a(%Cpu{} = cpu, hw, shift_fn) do
+    {value, cpu, hw} = Cpu.read(cpu, :a, hw)
+    {value, carry} = shift_fn.(value, cpu)
+    Cpu.set_flags(cpu, [{:z, false}, {:n, false}, {:h, false}, {:c, carry}])
+    |> Cpu.write(:a, hw, value)
+  end
+  # RLCA
+  # rotate left
+  def rlca(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rlc_u8_byte_carry/2)
+  # RLA
+  # rotate left through carry
+  def rla(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rl_u8_byte_carry/2)
+  # RRCA
+  # rorate right
+  def rrca(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rrc_u8_byte_carry/2)
+  # RRA
+  # rorate right through carry
+  def rra(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rr_u8_byte_carry/2)
+
 
   # Bit instructions
   #

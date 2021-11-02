@@ -213,10 +213,10 @@ defmodule Gameboy.Cpu.Decode do
   def instruction(0x25, cpu, hw), do: Exec.dec(cpu, hw, :h)
   def instruction(0x2d, cpu, hw), do: Exec.dec(cpu, hw, :l)
   def instruction(0x35, cpu, hw), do: Exec.dec(cpu, hw, :hl)
-  def instruction(0x07, cpu, hw), do: Exec.rlc(cpu, hw, :a)
-  def instruction(0x17, cpu, hw), do: Exec.rl(cpu, hw, :a)
-  def instruction(0x0f, cpu, hw), do: Exec.rrc(cpu, hw, :a)
-  def instruction(0x1f, cpu, hw), do: Exec.rr(cpu, hw, :a)
+  def instruction(0x07, cpu, hw), do: Exec.rlca(cpu, hw)
+  def instruction(0x17, cpu, hw), do: Exec.rla(cpu, hw)
+  def instruction(0x0f, cpu, hw), do: Exec.rrca(cpu, hw)
+  def instruction(0x1f, cpu, hw), do: Exec.rra(cpu, hw)
 
   # Control instructions
   def instruction(0xc3, cpu, hw), do: Exec.jp_nn(cpu, hw)
