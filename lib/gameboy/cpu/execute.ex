@@ -324,7 +324,7 @@ defmodule Gameboy.Cpu.Execute do
     cond do
       cpu.ime ->
         {Map.put(cpu, :state, :halt), hw}
-      !is_nil(Interrupts.check(hw.intr)) ->
+      is_nil(Interrupts.check(hw.intr)) ->
         {Map.put(cpu, :state, :halt), hw}
       true ->
         {Map.put(cpu, :state, :haltbug), hw}
@@ -342,6 +342,7 @@ defmodule Gameboy.Cpu.Execute do
   # 4 cycles
   # Disable interrupt immediately (unlike how ei is delayed)
   def di(%Cpu{} = cpu, hw) do
+    # IO.puts("di")
     {Map.put(cpu, :ime, false), hw}
   end
 
@@ -356,11 +357,6 @@ defmodule Gameboy.Cpu.Execute do
   def _shift(%Cpu{} = cpu, hw, dst, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {value, carry} = shift_fn.(value, cpu)
-    # Cpu.set_flag(cpu, :z, value == 0)
-    # |> Cpu.set_flag(:n, false)
-    # |> Cpu.set_flag(:h, false)
-    # |> Cpu.set_flag(:c, carry)
-    # |> Cpu.write(dst, hw, value)
     Cpu.set_flags(cpu, [{:z, value == 0}, {:n, false}, {:h, false}, {:c, carry}])
     |> Cpu.write(dst, hw, value)
   end

@@ -8,19 +8,6 @@ defmodule Gameboy.Cpu.Decode do
       nil ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         instruction(cpu.opcode, cpu, hw)
-        # try do
-        #   instruction(cpu.opcode, cpu, hw)
-        # rescue
-        #   e in RuntimeError ->
-        #     IO.puts("[error]")
-        #     IO.puts("opcode = #{Utils.to_hex(cpu.opcode)}")
-        #     IO.puts("#{inspect(cpu)}")
-        #     receive do
-        #       _ ->
-        #         true
-        #     end
-        #     raise "#{inspect(cpu)}"
-        # end
       value ->
         # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
         {cpu, hw} = instruction(cpu.opcode, cpu, hw)
