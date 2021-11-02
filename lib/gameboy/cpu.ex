@@ -195,8 +195,14 @@ defmodule Gameboy.Cpu do
 
 
   # Add two u16 values, then get carries from bit 7 (carry) and bit 3 (half carry)
+  # Note that the result is the sum of a + SIGNED b
+  # Carries are calculate using UNSIGNED b
+  @signed_table 0..255 |> Enum.map(fn x ->
+    msb = x &&& 0x80
+    if msb != 0, do: x ||| 0xff00, else: x
+  end) |> List.to_tuple()
   def add_u16_byte_carry(a, b) do
-    sum = (a + b) &&& 0xffff
+    sum = (a + elem(@signed_table, b)) &&& 0xffff
     carry = (((a &&& 0xff) + (b &&& 0xff)) &&& 0x100) != 0
     half_carry = (((a &&& 0xf) + (b &&& 0xf)) &&& 0x10) != 0
     {sum, carry, half_carry}
