@@ -41,7 +41,7 @@ defmodule Gameboy do
         %{gb | cpu: cpu, hw: hw}
       :halt ->
         # IO.puts("Halt")
-        pc = cpu.pc
+        # pc = cpu.pc
         # IO.puts("#{disassemble(gb.cpu.opcode, gb.cpu, gb.hw)}")
         %{gb | cpu: cpu, hw: Hardware.sync_cycle(hw)}
       _ -> # stop?
@@ -84,7 +84,7 @@ defmodule Gameboy do
     File.write!(path, :erlang.term_to_binary(gb), [:write])
   end
 
-  def load_state(gb, path \\ "state.gb") do
+  def load_state(path \\ "state.gb") do
     path
     |> File.read!()
     |> :erlang.binary_to_term()

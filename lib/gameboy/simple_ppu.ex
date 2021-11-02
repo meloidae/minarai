@@ -4,36 +4,6 @@ defmodule Gameboy.SimplePpu do
   alias Gameboy.SimplePpu, as: Ppu
   alias Gameboy.Interrupts
 
-  defmodule Screen do
-
-    @screen_width 160
-    @screen_height 144
-
-    defstruct buffer: nil
-              # index: 0,
-              # enabled: false,
-              #ready: false
-
-    # @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
-    def init do
-      # Buffer using iolist
-      buffer = []
-      # %Screen{buffer: buffer, ready: false}
-      %Screen{buffer: buffer}
-    end
-
-    def vblank(screen) do
-      # send(Minarai, {:update, screen.buffer |> IO.iodata_to_binary()})
-      # Map.put(screen, :ready, true)
-      screen
-    end
-    # def hblank(screen), do: Map.put(screen, :buffer, screen.buffer |> IO.iodata_to_binary())
-    def flush(screen) do
-      # %{screen | ready: false, buffer: []}
-      Map.put(screen, :buffer, [])
-    end
-  end
-
   @vram_size 0x4000
   @oam_size 0xa0
   @vram_mask 0x1fff
@@ -85,7 +55,6 @@ defmodule Gameboy.SimplePpu do
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    # screen = Screen.init()
     # %Ppu{vram: vram, oam: oam, counter: 0, screen: screen}
     %Ppu{vram: vram, oam: oam, counter: 0}
   end
@@ -181,7 +150,7 @@ defmodule Gameboy.SimplePpu do
     Map.put(ppu, :lcds, value &&& 0b0111_1000)
   end
 
-  def bg_palette(%Ppu{bgp: bgp} = ppu), do: bgp
+  def bg_palette(%Ppu{bgp: bgp} = _ppu), do: bgp
 
   def set_bg_palette(%Ppu{} = ppu, value), do: Map.put(ppu, :bgp, value &&& 0xff)
 
@@ -201,7 +170,7 @@ defmodule Gameboy.SimplePpu do
   def set_line_y(ppu, _), do: ppu
 
   def line_y_compare(%Ppu{lyc: lyc} = _ppu), do: lyc
-  def set_line_y_compare(%Ppu{lyc: lyc} = ppu, value), do: Map.put(ppu, :lyc, value &&& 0xff)
+  def set_line_y_compare(%Ppu{} = ppu, value), do: Map.put(ppu, :lyc, value &&& 0xff)
 
   def window_x(%Ppu{wx: wx} = _ppu), do: wx
   def set_window_x(%Ppu{} = ppu, value), do: Map.put(ppu, :wx, value &&& 0xff)
@@ -241,7 +210,6 @@ defmodule Gameboy.SimplePpu do
           %{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}
         :pixel_transfer ->
           # Draw line
-          # ppu = draw_scanline(ppu)
           pixels = draw_scanline(ppu)
           if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
           %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
@@ -252,7 +220,6 @@ defmodule Gameboy.SimplePpu do
             Interrupts.request(intr, :vblank)
             if elem(@vblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            # %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly, screen: Screen.vblank(ppu.screen)}
             vblank(ppu)
             %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}
           else
@@ -265,7 +232,6 @@ defmodule Gameboy.SimplePpu do
           if new_ly == 153 do
             if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            # %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, screen: Screen.flush(ppu.screen)}
             %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}
           else
             if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
@@ -392,6 +358,7 @@ defmodule Gameboy.SimplePpu do
 
   defp draw_scanline(ppu) do
     scanline(ppu)
+    # scanline_flat(ppu)
     # scanline_task(ppu.oam.data, ppu.vram.data, ppu.lcdc, ppu.ly, ppu.scy, ppu.scx, ppu.bgp, ppu.obp0, ppu.obp1)
     # MinaraiNif.scanline(ppu.vram.data,
     #   ppu.oam.data,
@@ -402,13 +369,12 @@ defmodule Gameboy.SimplePpu do
     #   ppu.bgp,
     #   ppu.obp0,
     #   ppu.obp1)
-
   end
 
   defp scanline(ppu) do
     sprites = get_sprite_map(ppu)
-    sprites_set = Map.keys(sprites)
-                  |> MapSet.new()
+    # sprites_set = Map.keys(sprites)
+    #               |> MapSet.new()
 
     lcdc = ppu.lcdc
     y = ppu.scy + ppu.ly
@@ -427,7 +393,7 @@ defmodule Gameboy.SimplePpu do
     if elem(@tile_data_addr, lcdc) do
       # 0x8000 address mode
       Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Stream.zip(x_coords)
+      |> Enum.zip(x_coords)
       |> Enum.map(fn {tile_id, xs} -> 
         elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
         |> Enum.zip(xs)
@@ -435,25 +401,35 @@ defmodule Gameboy.SimplePpu do
           if x < 0 do
             []
           else
-            if MapSet.member?(sprites_set, x) do
-              case sprites do
-                %{^x => {sp, true}} ->
-                  bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                  if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-                %{^x => {sp, _}} ->
-                  elem(@color, sp)
-              end
-            else
-              bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-              elem(@color, bg_pixel)
+            case Map.get(sprites, x) do
+              {sp, true} ->
+                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+              {sp, _} ->
+                elem(@color, sp)
+              _ ->
+                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                elem(@color, bg_pixel)
             end
+            # if MapSet.member?(sprites_set, x) do
+            #   case sprites do
+            #     %{^x => {sp, true}} ->
+            #       bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            #       if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+            #     %{^x => {sp, _}} ->
+            #       elem(@color, sp)
+            #   end
+            # else
+            #   bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            #   elem(@color, bg_pixel)
+            # end
           end
         end)
       end)
     else
       # 0x8800 address mode
       Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Stream.zip(x_coords)
+      |> Enum.zip(x_coords)
       |> Enum.map(fn {tile_id, xs} ->
         elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
         |> Enum.zip(xs)
@@ -461,20 +437,97 @@ defmodule Gameboy.SimplePpu do
           if x < 0 do
             []
           else
-            if MapSet.member?(sprites_set, x) do
-              case sprites do
-                %{^x => {sp, true}} ->
-                  bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                  if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-                %{^x => {sp, _}} ->
-                  elem(@color, sp)
-              end
-            else
-              bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-              elem(@color, bg_pixel)
+            case Map.get(sprites, x) do
+              {sp, true} ->
+                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+              {sp, _} ->
+                elem(@color, sp)
+              _ ->
+                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+                elem(@color, bg_pixel)
             end
+            # if MapSet.member?(sprites_set, x) do
+            #   case sprites do
+            #     %{^x => {sp, true}} ->
+            #       bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            #       if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+            #     %{^x => {sp, _}} ->
+            #       elem(@color, sp)
+            #   end
+            # else
+            #   bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            #   elem(@color, bg_pixel)
+            # end
           end
         end)
+      end)
+    end
+  end
+
+  defp repeat_tiles(tiles, n) do
+    tiles
+    |> Enum.map(&(List.duplicate(&1, n)))
+    |> List.flatten()
+  end
+
+  defp scanline_flat(ppu) do
+    sprites = get_sprite_map(ppu)
+
+    lcdc = ppu.lcdc
+    y = ppu.scy + ppu.ly
+
+    # Render background
+    tile_line = rem(y, 8) * 2
+    row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
+    tile_index = div(ppu.scx, 8) &&& 0x1f
+    scx_offset = rem(ppu.scx, 8)
+    num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
+    off_color = elem(@off_color, ppu.bgp)
+    # x coordinates on screen
+    # x_coords = -scx_offset..159
+
+    if elem(@tile_data_addr, lcdc) do
+      # 0x8000 address mode
+      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+      |> Enum.map(fn tile_id ->
+        elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
+      end)
+      |> repeat_tiles(8)
+      |> Stream.drop(scx_offset)
+      |> Stream.zip(0..159)
+      |> Enum.map(fn {p, x} -> 
+        case Map.get(sprites, x) do
+          {sp, true} ->
+            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+          {sp, _} ->
+            elem(@color, sp)
+          _ ->
+            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            elem(@color, bg_pixel)
+        end
+      end)
+    else
+      # 0x8800 address mode
+      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+      |> Enum.map(fn tile_id ->
+        elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
+      end)
+      |> repeat_tiles(8)
+      |> Stream.drop(scx_offset)
+      |> Stream.zip(0..159)
+      |> Enum.map(fn {p, x} ->
+        case Map.get(sprites, x) do
+          {sp, true} ->
+            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+          {sp, _} ->
+            elem(@color, sp)
+          _ ->
+            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+            elem(@color, bg_pixel)
+        end
       end)
     end
   end
