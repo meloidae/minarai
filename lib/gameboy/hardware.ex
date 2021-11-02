@@ -4,7 +4,6 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Memory
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
-  # alias Gameboy.Ppu
   alias Gameboy.SimplePpu, as: Ppu
   alias Gameboy.Wram
   alias Gameboy.Hram
@@ -140,15 +139,15 @@ defmodule Gameboy.Hardware do
   for low <- 0..0xff do
     case low do
       0x00 -> 
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(_hw, addr, unquote(low)) do
           raise "Read from joypad at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x01 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(_hw, addr, unquote(low)) do
           raise "Read from serial data at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x02 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(_hw, addr, unquote(low)) do
           raise "Read from serial control at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x04 ->
@@ -196,7 +195,7 @@ defmodule Gameboy.Hardware do
           memory_cycle(hw, fn hw -> {Ppu.line_y_compare(hw.ppu), hw} end)
         end
       0x46 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(_hw, addr, unquote(low)) do
           raise "Read from oam data transfer at #{Utils.to_hex(addr)} is unimplemented"
         end
       0x47 ->
@@ -204,11 +203,11 @@ defmodule Gameboy.Hardware do
           memory_cycle(hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
         end
       0x48 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.ob_palette0(hw.ppu), hw} end)
         end
       0x49 ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.ob_palette1(hw.ppu), hw} end)
         end
       0x4a ->
@@ -216,7 +215,7 @@ defmodule Gameboy.Hardware do
           memory_cycle(hw, fn hw -> {Ppu.window_y(hw.ppu), hw} end)
         end
       0x4b ->
-        defp _read_ff(hw, addr, unquote(low)) do
+        defp _read_ff(hw, _addr, unquote(low)) do
           memory_cycle(hw, fn hw -> {Ppu.window_x(hw.ppu), hw} end)
         end
       0xff ->
@@ -394,7 +393,7 @@ defmodule Gameboy.Hardware do
           Ppu.read_binary_vram(hw.ppu, addr, 0xa0)
         end
       high <= 0xbf ->
-        defp dma_read(hw, addr, unquote(high)) do
+        defp dma_read(_hw, addr, unquote(high)) do
           raise "dma read from ram at #{Utils.to_hex(addr)} is unimplemented"
         end
       high <= 0xcf ->
