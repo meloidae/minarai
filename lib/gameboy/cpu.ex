@@ -76,7 +76,7 @@ defmodule Gameboy.Cpu do
           {%{cpu | pc: addr, sp: sp, state: :running}, hw}
         else
           # When ime is disabled, resume from halt without acknowledging interrupts
-          IO.puts("Resume no jump")
+          # IO.puts("Resume no jump")
           {Map.put(cpu, :state, :running), hw}
         end
     end
@@ -107,7 +107,7 @@ defmodule Gameboy.Cpu do
 
 
   # 16-bit writes to a register
-  def write_register(cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xff}
+  def write_register(cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xf0}  # lower nibble of f is always zero
   def write_register(cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
   def write_register(cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
   def write_register(cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
@@ -119,7 +119,7 @@ defmodule Gameboy.Cpu do
 
   # 8-bit writes to a register
   def write_register(cpu, :a, data), do: Map.put(cpu, :a, data)
-  def write_register(cpu, :f, data), do: Map.put(cpu, :f, data)
+  def write_register(cpu, :f, data), do: Map.put(cpu, :f, data &&& 0xf0)  # Lower nibble is always zero
   def write_register(cpu, :b, data), do: Map.put(cpu, :b, data)
   def write_register(cpu, :c, data), do: Map.put(cpu, :c, data)
   def write_register(cpu, :d, data), do: Map.put(cpu, :d, data)
@@ -261,13 +261,14 @@ defmodule Gameboy.Cpu do
   def rlc_u8_byte_carry(value) do
     elem(@rlc, value)
   end
+
   # def rlc_u8_byte_carry(value) do
   #   carry = (value &&& 0x80) != 0
   #   value = if carry, do: (value <<< 1) ||| 0x1, else: value <<< 1
   #   value = value &&& 0xff
   #   {value, carry}
   # end
-  def rlc_u8_byte_carry(value, _), do: rlc_u8_byte_carry(value)
+  def rlc_u8_byte_carry(value, _cpu), do: rlc_u8_byte_carry(value)
 
   # Rotate u8 value to left through carry flag, old bit 7 to carry
   def rl_u8_byte_carry(value, cpu) do
@@ -295,7 +296,7 @@ defmodule Gameboy.Cpu do
   #   value = value &&& 0xff
   #   {value, carry}
   # end
-  def rrc_u8_byte_carry(value, _), do: rrc_u8_byte_carry(value)
+  def rrc_u8_byte_carry(value, _cpu), do: rrc_u8_byte_carry(value)
 
   # Rotate u8 value to right through carry flag, old bit 0 to carry
   def rr_u8_byte_carry(value, cpu) do
@@ -311,7 +312,7 @@ defmodule Gameboy.Cpu do
     value = (value <<< 1) &&& 0xff
     {value, carry}
   end
-  def sla_u8_byte_carry(value, _), do: sla_u8_byte_carry(value)
+  def sla_u8_byte_carry(value, _cpu), do: sla_u8_byte_carry(value)
 
   # Shift u8 value to right, msb doesn't change
   def sra_u8_byte_carry(value) do
@@ -328,7 +329,7 @@ defmodule Gameboy.Cpu do
     value = value >>> 1
     {value, carry}
   end
-  def srl_u8_byte_carry(value, _), do: srl_u8_byte_carry(value)
+  def srl_u8_byte_carry(value, _cpu), do: srl_u8_byte_carry(value)
 
   # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
   def fetch_imm8(cpu, hw) do
@@ -439,9 +440,18 @@ defmodule Gameboy.Cpu do
 
 
   # write for a single register
-  for reg <- [:a, :f, :b, :c, :d, :e, :h, :l] do
-    def write(cpu, unquote(reg), hw, data), do: {Map.put(cpu, unquote(reg), data), hw}
-  end
+  # for reg <- [:a, :f, :b, :c, :d, :e, :h, :l] do
+  #   def write(cpu, unquote(reg), hw, data), do: {Map.put(cpu, unquote(reg), data), hw}
+  # end
+  def write(cpu, :a, hw, data), do: {Map.put(cpu, :a, data), hw}
+  # Lower nibble of f is always zero
+  def write(cpu, :f, hw, data), do: {Map.put(cpu, :f, data &&& 0xf0), hw}
+  def write(cpu, :b, hw, data), do: {Map.put(cpu, :b, data), hw}
+  def write(cpu, :c, hw, data), do: {Map.put(cpu, :c, data), hw}
+  def write(cpu, :d, hw, data), do: {Map.put(cpu, :d, data), hw}
+  def write(cpu, :e, hw, data), do: {Map.put(cpu, :e, data), hw}
+  def write(cpu, :h, hw, data), do: {Map.put(cpu, :h, data), hw}
+  def write(cpu, :l, hw, data), do: {Map.put(cpu, :l, data), hw}
 
   # write for addr (16 bit registers or immediate address)
   for reg <- [:bc, :de, :hl] do

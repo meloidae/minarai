@@ -50,7 +50,7 @@ defmodule Minarai do
       # timer: timer,
       texture: texture,
       buffer: buffer,
-      pid: spawn_link(fn -> Gameboy.debug_start(opts) end),
+      pid: Process.spawn(fn -> Gameboy.debug_start(opts) end, [:link]),
       count: 0.0,
       prev_time: nil,
       fps: nil,
