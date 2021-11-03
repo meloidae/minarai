@@ -72,7 +72,7 @@ defmodule Gameboy.Cpu do
             Interrupts.acknowledge(hw.intr, mask)
             # Change pc to address specified by interrupt and switch to running state
             if cpu.state != :running do
-              IO.puts("Resume with jump")
+              # IO.puts("Resume with jump")
             end
             {%{cpu | pc: addr, sp: sp, state: :running}, hw}
           cpu.state != :haltbug ->
