@@ -12,6 +12,7 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Interrupts
   alias Gameboy.Serial
   alias Gameboy.Dma
+  alias Gameboy.Joypad
   alias Gameboy.Utils
 
   defstruct bootrom: struct(Bootrom),
@@ -24,6 +25,7 @@ defmodule Gameboy.Hardware do
             intr: nil,
             dma: nil,
             serial: struct(Serial),
+            joypad: struct(Joypad),
             counter: 0
 
   @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
@@ -139,8 +141,8 @@ defmodule Gameboy.Hardware do
   for low <- 0..0xff do
     case low do
       0x00 -> 
-        defp _read_ff(_hw, addr, unquote(low)) do
-          raise "Read from joypad at #{Utils.to_hex(addr)} is unimplemented"
+        defp _read_ff(hw, addr, unquote(low)) do
+          memory_cycle(hw, fn hw -> {Joypad.get(hw.joypad), hw} end)
         end
       0x01 ->
         defp _read_ff(_hw, addr, unquote(low)) do
@@ -315,7 +317,7 @@ defmodule Gameboy.Hardware do
     # IO.puts("write_ff: addr = #{Utils.to_hex(addr)}")
     case addr &&& 0xff do
       0x00 -> 
-        raise "Write to joypad at #{Utils.to_hex(addr)} is unimplemented"
+        memory_cycle(hw, fn hw -> Map.put(hw, :joypad, Joypad.set(hw.joypad, value)) end)
       0x01 ->
         # IO.puts("addr = #{Utils.to_hex(addr)}, value = #{Utils.to_hex(value)}")
         memory_cycle(hw, fn hw -> Map.put(hw, :serial, Serial.set_serial_data(hw.serial, value)) end)
@@ -331,6 +333,7 @@ defmodule Gameboy.Hardware do
         timer_write_cycle(hw, fn timer, intr -> Timer.set_tac_cycle(timer, intr, value) end)
       0x0f ->
         memory_cycle(hw, fn hw ->
+          # IO.puts("IF 0x#{Utils.to_hex(value)}")
           Interrupts.set_interrupt_flag(hw.intr, value)
           hw
         end)
@@ -363,6 +366,7 @@ defmodule Gameboy.Hardware do
         # raise "Write to disable bootrom at #{Utils.to_hex(addr)} is unimplemented"
       0xff ->
         memory_cycle(hw, fn hw ->
+          # IO.puts("IE 0x#{Utils.to_hex(value)}")
           Interrupts.set_interrupt_enable(hw.intr, value)
           hw
         end)
