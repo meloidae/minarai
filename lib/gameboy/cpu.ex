@@ -5,16 +5,6 @@ defmodule Gameboy.Cpu do
   alias Gameboy.Interrupts
   alias Gameboy.Utils
 
-  # defmodule RegisterFile do
-  #   defstruct af: 0x0000,
-  #             bc: 0x0000,
-  #             de: 0x0000,
-  #             hl: 0x0000,
-  #             pc: 0x0000,
-  #             sp: 0x0000
-
-  # end
-
   defstruct a: 0x00,
             f: 0x00,
             b: 0x00,
@@ -25,7 +15,6 @@ defmodule Gameboy.Cpu do
             l: 0x00,
             pc: 0x0000,
             sp: 0x0000,
-            # regs: struct(RegisterFile),
             opcode: 0x0,
             ime: false,
             delayed_set_ime: nil, 

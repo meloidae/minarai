@@ -30,7 +30,6 @@ defmodule Gameboy.SimplePpu do
             bgp: 0x00,
             obp0: 0x00,
             obp1: 0x00,
-            # screen: nil
             buffer: []
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
@@ -52,10 +51,12 @@ defmodule Gameboy.SimplePpu do
   @obj_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 1)) != 0 end) |> List.to_tuple()
   @bg_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
 
+  @sprite_table_name :sprites
+
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    # %Ppu{vram: vram, oam: oam, counter: 0, screen: screen}
+    # :ets.new(@sprite_table_name, [:named_table])
     %Ppu{vram: vram, oam: oam, counter: 0}
   end
 
@@ -213,7 +214,6 @@ defmodule Gameboy.SimplePpu do
           pixels = draw_scanline(ppu)
           if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
           %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
-          # %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | ppu.buffer]}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
@@ -351,7 +351,6 @@ defmodule Gameboy.SimplePpu do
   end
 
   defp chunk(<<>>, acc), do: Enum.reverse(acc)
-  # defp chunk(<<h::binary-size(4), rest::binary>>, acc), do: chunk(rest, [h | acc])
   defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
 
   defp draw_scanline(ppu) do

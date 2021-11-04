@@ -31,14 +31,7 @@ defmodule Gameboy.Hardware do
   @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
   @low_addr 0..0xffff |> Enum.map(fn x -> x &&& 0xff end) |> List.to_tuple()
 
-  # def synced_read(hw, addr) do
-  #   Hardware.read(hw, addr)
-  # end
   def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 ||| addr)
-  # def synced_write(hw, addr, data) do
-  #   # IO.puts("synced_write: addr = #{Utils.to_hex(addr)}")
-  #   Hardware.write(hw, addr, data)
-  # end
   def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 ||| addr, data)
   def sync_cycle(hw) do
     Hardware.cycle(hw)
@@ -77,8 +70,8 @@ defmodule Gameboy.Hardware do
     }
   end
 
-  defp _read(hw, addr, 0x00) when hw.bootrom.active do
-    memory_cycle(hw, fn hw -> {Bootrom.read(hw.bootrom, addr), hw} end)
+  defp _read(%Hardware{bootrom: bootrom} = hw, addr, 0x00) when bootrom.active do
+    memory_cycle(hw, fn hw -> {Bootrom.read(bootrom, addr), hw} end)
   end
   for high <- 0..0xff do
     cond do
@@ -454,7 +447,6 @@ defmodule Gameboy.Hardware do
     %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}
   end
 
-  # def machine_cycle(%Hardware{ppu: ppu, timer: timer} = hw) do
   def cycle(hw) do
     # oam
     {ppu, dma} = if hw.dma.requested do

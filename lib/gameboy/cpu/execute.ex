@@ -492,7 +492,6 @@ defmodule Gameboy.Cpu.Execute do
   def jr_cc_n(%Cpu{} = cpu, hw, cc) do
     # fetch immediate value first (increments pc)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
-    # addr = Cpu.read_register(cpu, :pc)
     addr = cpu.pc
     if Cpu.check_condition(cpu, cc) do
       # msb = offset &&& 0x80

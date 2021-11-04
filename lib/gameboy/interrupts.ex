@@ -1,6 +1,7 @@
 defmodule Gameboy.Interrupts do
   use Bitwise
   alias Gameboy.Interrupts
+  alias Gameboy.Utils
   # defstruct enable: nil,
   #           flag: nil
 
