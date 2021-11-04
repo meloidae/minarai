@@ -39,8 +39,8 @@ defmodule Gameboy.Cpu do
   end
 
   # handle interrupt TODO
-  def handle_interrupt(cpu, hw) do
-    case Interrupts.check(hw.intr) do
+  def handle_interrupt(%Cpu{} = cpu, %Hardware{intr: intr} = hw) do
+    case Interrupts.check(intr) do
       nil ->
         # No interrupt is requested
         {cpu, hw}
@@ -58,12 +58,12 @@ defmodule Gameboy.Cpu do
             sp = (sp - 1) &&& 0xffff
             hw = Hardware.synced_write(hw, sp, low)
             # Acknowledge interrupt
-            Interrupts.acknowledge(hw.intr, mask)
+            Interrupts.acknowledge(intr, mask)
             # Change pc to address specified by interrupt and switch to running state
             if cpu.state != :running do
               # IO.puts("Resume with jump")
             end
-            {%{cpu | pc: addr, sp: sp, state: :running}, hw}
+            {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, hw}
           cpu.state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
             # IO.puts("Resume no jump")
@@ -74,16 +74,12 @@ defmodule Gameboy.Cpu do
         end
     end
   end
-  # def handle_interrupt(gb) do
-  #   gb
-  # end
-
 
   # 16-bit reads from a register
-  def read_register(cpu, :af), do: (cpu.a <<< 8) ||| cpu.f
-  def read_register(cpu, :bc), do: (cpu.b <<< 8) ||| cpu.c
-  def read_register(cpu, :de), do: (cpu.d <<< 8) ||| cpu.e
-  def read_register(cpu, :hl), do: (cpu.h <<< 8) ||| cpu.l
+  def read_register(%Cpu{a: a, f: f}, :af), do: (a <<< 8) ||| f
+  def read_register(%Cpu{b: b, c: c}, :bc), do: (b <<< 8) ||| c
+  def read_register(%Cpu{d: d, e: e}, :de), do: (d <<< 8) ||| e
+  def read_register(%Cpu{h: h, l: l}, :hl), do: (h <<< 8) ||| l
   def read_register(cpu, :pc), do: cpu.pc
   def read_register(cpu, :sp), do: cpu.sp
 
@@ -139,6 +135,22 @@ defmodule Gameboy.Cpu do
     # end
   end
 
+  for z <- [true, false] do
+    for n <- [true, false] do
+      for h <- [true, false] do
+        for c <- [true, false] do
+          z_val = if z, do: 1 <<< 7, else: 0
+          n_val = if n, do: 1 <<< 6, else: 0
+          h_val = if h, do: 1 <<< 5, else: 0
+          c_val = if c, do: 1 <<< 4, else: 0
+          f_val = bor(z_val, n_val) |> bor(h_val) |> bor(c_val)
+          def set_all_flags(%Cpu{} = cpu, unquote(z), unquote(n), unquote(h), unquote(c)) do
+            Map.put(cpu, :f, unquote(f_val))
+          end
+        end
+      end
+    end
+  end
 
   def set_flags(cpu, flags) do
     f = compute_flags(flags, cpu.f)

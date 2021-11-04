@@ -1,15 +1,15 @@
 defmodule Gameboy.Test.Frame do
-  def run_frame(gb) when gb.hw.counter >= 70224, do: gb
+  # def run_frame(gb) when gb.hw.counter >= 70224, do: gb
+  def run_frame({_, %{counter: counter}} = gb) when counter >= 70224, do: gb
   def run_frame(gb), do: run_frame(Gameboy.step(gb))
   def run_frames_fps(gb, 0, fps_info), do: {gb, fps_info}
   def run_frames_fps(gb, n, fps_info) do
     start_time = System.monotonic_time()
     gb = run_frame(gb)
     end_time = System.monotonic_time()
-    counter = gb.hw.counter
-    gb = put_in(gb.hw.counter, 0)
+    {cpu, hw} = gb
+    gb = {cpu, Map.put(hw, :counter, 0)}
     fps = 1_000 / System.convert_time_unit(end_time - start_time, :native, :millisecond)
-    # IO.puts("#{n}: #{fps}, #{counter}")
     run_frames_fps(gb, n - 1, [fps | fps_info])
   end
 
@@ -19,9 +19,10 @@ defmodule Gameboy.Test.Frame do
   end
 end
 
+frames = 20 * 60
 gb = Gameboy.init()
 
-{gb, fps_info} = Gameboy.Test.Frame.run_frames_fps(gb, 300, [])
+{_gb, fps_info} = Gameboy.Test.Frame.run_frames_fps(gb, frames, [])
 for {i, fps} <- Stream.zip(Stream.iterate(0, &(&1 + 1)), Enum.reverse(fps_info)) do
   IO.puts("#{i}: #{fps}")
 end

@@ -201,7 +201,7 @@ defmodule Gameboy.SimplePpu do
     if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu, intr), else: ppu
   end
 
-  defp do_cycle(ppu, intr) do
+  defp do_cycle(%Ppu{} = ppu, intr) do
     counter = ppu.counter - 1
     if counter > 0 do
       Map.put(ppu, :counter, counter)
@@ -291,24 +291,14 @@ defmodule Gameboy.SimplePpu do
   |> List.to_tuple()
 
 
-  defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
+  defp reduce_with_index([], _, acc, _), do: acc
+  defp reduce_with_index([h | t], index, acc, reduce_fn) do
+    reduce_with_index(t, index + 1, reduce_fn.(h, index, acc), reduce_fn)
+  end
+
+  defp compute_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu, sprite_list) do
     sprite_size = elem(@obj_size, lcdc)
-    Memory.read_binary(oam, 0, @oam_size)
-    |> chunk([])
-    |> Stream.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
-    |> Stream.take(10)
-    |> Stream.filter(fn {_, x, _, _} ->
-      x > 0 and x < 168
-    end)
-    |> Stream.with_index()
-    |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
-      # cond do
-      #   x0 < x1 -> true
-      #   x0 === x1 and i0 > i1 -> true
-      #   true -> false
-      # end
-      (x0 < x1) or (x0 === x1 and i0 > i1)
-    end)
+    sprite_list
     |> Enum.reduce(%{}, fn {{y, x, tile_id, flags}, _}, acc ->
       palette = if elem(@palette_flag, flags), do: obp1, else: obp0
       off_color = elem(@off_color, palette)
@@ -327,8 +317,9 @@ defmodule Gameboy.SimplePpu do
       else
         elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
       end
-      |> Stream.with_index()
-      |> Enum.reduce(acc, fn {p, i}, m ->
+      # |> Enum.with_index()
+      # |> Enum.reduce(acc, fn {p, i}, m ->
+      |> reduce_with_index(0, acc, fn p, i, m ->
         color = (palette >>> (p * 2)) &&& 0x3
         if color === off_color do
           m
@@ -337,6 +328,23 @@ defmodule Gameboy.SimplePpu do
         end
       end)
     end)
+  end
+
+
+  defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly} = ppu) do
+    sprite_size = elem(@obj_size, lcdc)
+    sprite_list = Memory.read_binary(oam, 0, @oam_size)
+    |> chunk([])
+    |> Enum.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
+    |> Enum.take(10)
+    |> Enum.filter(fn {_, x, _, _} ->
+      x > 0 and x < 168
+    end)
+    |> Enum.with_index()
+    |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
+      (x0 < x1) or (x0 === x1 and i0 > i1)
+    end)
+    compute_sprite_map(ppu, sprite_list)
   end
 
   defp sprite_chunks(<<>>, _count, _size, _ly, sprites), do: sprites
@@ -368,103 +376,98 @@ defmodule Gameboy.SimplePpu do
     #   ppu.obp1)
   end
 
-  defp scanline(ppu) do
-    sprites = get_sprite_map(ppu)
-    # sprites_set = Map.keys(sprites)
-    #               |> MapSet.new()
+  def zip_map([], _, acc, _), do: Enum.reverse(acc)
+  def zip_map(_, [], acc, _), do: Enum.reverse(acc)
+  def zip_map([h1 | t1], [h2 | t2], acc, map_fn) do
+    zip_map(t1, t2, [map_fn.(h1, h2) | acc], map_fn)
+  end
 
-    lcdc = ppu.lcdc
-    y = ppu.scy + ppu.ly
+  def zip_chunk_map(_, _, acc, _), do: Enum.reverse(acc)
+  def zip_chunk_map([], _, acc, _, _), do: Enum.reverse(acc)
+  def zip_chunk_map(_, [], acc, _, _), do: Enum.reverse(acc)
+  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7, h8 | t], acc, remainder, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7, h8]) | acc], remainder, map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7 | t], acc, 7, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6 | t], acc, 6, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5 | t], acc, 5, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2, h3, h4 | t], acc, 4, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2, h3 | t], acc, 3, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1, h2 | t], acc, 2, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2]) | acc], map_fn)
+  end
+  def zip_chunk_map([hh | tt], [h1 | t], acc, 1, map_fn) do
+    zip_chunk_map(tt, t, [map_fn.(hh, [h1]) | acc], map_fn)
+  end
+
+  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, bgp: bgp} = ppu) do
+    sprites = get_sprite_map(ppu)
+
+    y = scy + ly
 
     # Render background
     tile_line = rem(y, 8) * 2
     row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
-    tile_index = div(ppu.scx, 8) &&& 0x1f
-    scx_offset = rem(ppu.scx, 8)
+    tile_index = div(scx, 8) &&& 0x1f
+    scx_offset = rem(scx, 8)
     num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
-    off_color = elem(@off_color, ppu.bgp)
+    off_color = elem(@off_color, bgp)
     # x coordinates on screen
     x_coords = -scx_offset..159
-         |> Enum.chunk_every(8)
+               |> Enum.to_list()
+         # |> Enum.chunk_every(8)
 
-    if elem(@tile_data_addr, lcdc) do
+    tile_row_fn = if elem(@tile_data_addr, lcdc) do
       # 0x8000 address mode
-      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Enum.zip(x_coords)
-      |> Enum.map(fn {tile_id, xs} -> 
-        elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
-        |> Enum.zip(xs)
-        |> Enum.map(fn {p, x} -> 
-          if x < 0 do
-            []
-          else
-            case Map.get(sprites, x) do
-              {sp, true} ->
-                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-              {sp, _} ->
-                elem(@color, sp)
-              _ ->
-                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                elem(@color, bg_pixel)
-            end
-            # if MapSet.member?(sprites_set, x) do
-            #   case sprites do
-            #     %{^x => {sp, true}} ->
-            #       bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            #       if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-            #     %{^x => {sp, _}} ->
-            #       elem(@color, sp)
-            #   end
-            # else
-            #   bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            #   elem(@color, bg_pixel)
-            # end
-          end
-        end)
-      end)
+      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + tile_line, 16)) end
     else
       # 0x8800 address mode
-      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Enum.zip(x_coords)
-      |> Enum.map(fn {tile_id, xs} ->
-        elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
-        |> Enum.zip(xs)
-        |> Enum.map(fn {p, x} ->
-          if x < 0 do
-            []
-          else
-            case Map.get(sprites, x) do
-              {sp, true} ->
-                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-              {sp, _} ->
-                elem(@color, sp)
-              _ ->
-                bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-                elem(@color, bg_pixel)
-            end
-            # if MapSet.member?(sprites_set, x) do
-            #   case sprites do
-            #     %{^x => {sp, true}} ->
-            #       bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            #       if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-            #     %{^x => {sp, _}} ->
-            #       elem(@color, sp)
-            #   end
-            # else
-            #   bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            #   elem(@color, bg_pixel)
-            # end
-          end
-        end)
-      end)
+      fn tile_id ->
+        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
+      end
     end
+
+    Memory.read_range(vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+    |> zip_chunk_map(x_coords, [], scx_offset, fn tile_id, xs ->
+      tile_row_fn.(tile_id)
+      |> zip_map(xs, [], fn p, x ->
+        if x < 0 do
+          []
+        else
+          case Map.get(sprites, x) do
+            {sp, true} ->
+              bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+              if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+            {sp, _} ->
+              elem(@color, sp)
+            _ ->
+              bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+              elem(@color, bg_pixel)
+          end
+        end
+      end)
+    end)
+  end
+
+  defp map_no_reverse([], acc, _), do: acc
+  defp map_no_reverse([h | t], acc, map_fn) do
+    map_no_reverse(t, [map_fn.(h) | acc], map_fn)
   end
 
   defp repeat_tiles(tiles, n) do
     tiles
-    |> Enum.map(&(List.duplicate(&1, n)))
+    # |> Enum.map(&(List.duplicate(&1, n)))
+    |> map_no_reverse([], &(List.duplicate(&1, n)))
     |> List.flatten()
   end
 
@@ -484,55 +487,38 @@ defmodule Gameboy.SimplePpu do
     # x coordinates on screen
     # x_coords = -scx_offset..159
 
-    if elem(@tile_data_addr, lcdc) do
-      # 0x8000 address mode
-      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Enum.map(fn tile_id ->
-        elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16))
-      end)
-      |> repeat_tiles(8)
-      |> Stream.drop(scx_offset)
-      |> Stream.zip(0..159)
-      |> Enum.map(fn {p, x} -> 
-        case Map.get(sprites, x) do
-          {sp, true} ->
-            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-          {sp, _} ->
-            elem(@color, sp)
-          _ ->
-            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            elem(@color, bg_pixel)
-        end
-      end)
+    tile_row_fn = if elem(@tile_data_addr, lcdc) do
+      fn tile_id -> elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16)) end
     else
-      # 0x8800 address mode
-      Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-      |> Enum.map(fn tile_id ->
+      fn tile_id ->
         elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
-      end)
-      |> repeat_tiles(8)
-      |> Stream.drop(scx_offset)
-      |> Stream.zip(0..159)
-      |> Enum.map(fn {p, x} ->
-        case Map.get(sprites, x) do
-          {sp, true} ->
-            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-          {sp, _} ->
-            elem(@color, sp)
-          _ ->
-            bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-            elem(@color, bg_pixel)
-        end
-      end)
+      end
     end
+
+    Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+    # |> Enum.map(tile_row_fn)
+    |> map_no_reverse([], tile_row_fn)
+    |> repeat_tiles(8)
+    |> Stream.drop(scx_offset)
+    |> Stream.zip(0..159)
+    |> Enum.map(fn {p, x} -> 
+      case Map.get(sprites, x) do
+        {sp, true} ->
+          bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+          if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+        {sp, _} ->
+          elem(@color, sp)
+        _ ->
+          bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
+          elem(@color, bg_pixel)
+      end
+    end)
   end
 
   defp vblank(ppu) do
     # sprites = Task.await_many(ppu.sprites)
     # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
-    send(Minarai, {:update, data})
+    # send(Minarai, {:update, data})
   end
 end

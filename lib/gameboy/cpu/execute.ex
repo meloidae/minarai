@@ -150,12 +150,8 @@ defmodule Gameboy.Cpu.Execute do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = Cpu.sub_u8_byte_carry(val1, val2)
-    # cpu = Cpu.set_flag(cpu, :z, diff == 0)
-    # |> Cpu.set_flag(:n, true)
-    # |> Cpu.set_flag(:h, half_carry)
-    # |> Cpu.set_flag(:c, carry)
-    cpu = Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}, {:c, carry}])
-    # IO.puts("cp")
+    # cpu = Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}, {:c, carry}])
+    cpu = Cpu.set_all_flags(cpu, diff == 0, true, half_carry, carry)
     {cpu, hw}
   end
 
@@ -357,7 +353,7 @@ defmodule Gameboy.Cpu.Execute do
   def _shift(%Cpu{} = cpu, hw, dst, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {value, carry} = shift_fn.(value, cpu)
-    Cpu.set_flags(cpu, [{:z, value == 0}, {:n, false}, {:h, false}, {:c, carry}])
+    Cpu.set_all_flags(cpu, value == 0, false, false, carry)
     |> Cpu.write(dst, hw, value)
   end
   # RLC dd
@@ -393,7 +389,7 @@ defmodule Gameboy.Cpu.Execute do
   def _shift_a(%Cpu{} = cpu, hw, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, :a, hw)
     {value, carry} = shift_fn.(value, cpu)
-    Cpu.set_flags(cpu, [{:z, false}, {:n, false}, {:h, false}, {:c, carry}])
+    Cpu.set_all_flags(cpu, false, false, false, carry)
     |> Cpu.write(:a, hw, value)
   end
   # RLCA
