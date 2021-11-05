@@ -3,18 +3,15 @@ defmodule Gameboy.Interrupts do
   alias Gameboy.Interrupts
   alias Gameboy.Utils
 
-  defstruct enable: 0x00,
-            flag: 0x00
-
   def init do
-    %Interrupts{enable: 0x00, flag: 0x00}
+    {0x00, 0x00}
   end
 
-  def interrupt_enable(intr), do: intr.enable
-  def set_interrupt_enable(intr, value), do: Map.put(intr, :enable, value)
+  def interrupt_enable({enable, _} = _intr), do: enable
+  def set_interrupt_enable({_, flag} = _intr, value), do: {value &&& 0b11111, flag}
 
-  def interrupt_flag(intr), do: intr.flag
-  def set_interrupt_flag(intr, value), do: Map.put(intr, :flag, value)
+  def interrupt_flag({_, flag} = _intr), do: flag
+  def set_interrupt_flag({enable, _} = _intr, value), do: {enable, value &&& 0b11111}
 
   @vblank_bit 0b1
   @stat_bit 0b10
@@ -28,47 +25,39 @@ defmodule Gameboy.Interrupts do
   def serial, do: @serial_bit
   def joypad, do: @joypad_bit
 
-  @vblank 0..0xff
-  |> Enum.map(fn x -> (x &&& 0b1) != 0 end)
-  |> List.to_tuple()
-  @stat 0..0xff
-  |> Enum.map(fn x -> (x &&& 0b10) != 0 end)
-  |> List.to_tuple()
-  @timer 0..0xff
-  |> Enum.map(fn x -> (x &&& 0b100) != 0 end)
-  |> List.to_tuple()
-  @serial 0..0xff
-  |> Enum.map(fn x -> (x &&& 0b1000) != 0 end)
-  |> List.to_tuple()
-  @joypad 0..0xff
-  |> Enum.map(fn x -> (x &&& 0b10000) != 0 end)
-  |> List.to_tuple()
-
-  def check(%Interrupts{enable: enable, flag: flag} = _intr) do
-    # Check if any enabled interrupt is requested
-    # Interrupt priority: vblank > stat > timer > serial > joypad
+  @intr_table 0..0b11_1111_1111
+  |> Enum.map(fn x ->
+    enable = x >>> 5
+    flag = x &&& 0b1_1111
     cond do
-      elem(@vblank, enable) and elem(@vblank, flag) ->
+      ((enable &&& 0b1) != 0) and ((flag &&& 0b1) != 0) ->
         {0x40, 0b0000_0001}
-      elem(@stat, enable) and elem(@stat, flag) ->
+      ((enable &&& 0b10) != 0) and ((flag &&& 0b10) != 0) ->
         {0x48, 0b0000_0010}
-      elem(@timer, enable) and elem(@timer, flag) ->
+      ((enable &&& 0b100) != 0) and ((flag &&& 0b100) != 0) ->
         {0x50, 0b0000_0100}
-      elem(@serial, enable) and elem(@serial, flag) ->
+      ((enable &&& 0b1000) != 0) and ((flag &&& 0b1000) != 0) ->
         {0x58, 0b0000_1000}
-      elem(@joypad, enable) and elem(@joypad, flag) ->
+      ((enable &&& 0b10000) != 0) and ((flag &&& 0b10000) != 0) ->
         {0x60, 0b0001_0000}
       true ->
         nil
     end
+  end)
+  |> List.to_tuple()
+
+  def check({enable, flag} = _intr) do
+    # Check if any enabled interrupt is requested
+    # Interrupt priority: vblank > stat > timer > serial > joypad
+    elem(@intr_table, (enable <<< 5) ||| flag)
   end
 
   def request(intr, 0), do: intr
-  def request(%Interrupts{flag: flag} = intr, req) do
-    Map.put(intr, :flag, flag ||| req)
+  def request({enable, flag} = _intr, req) do
+    {enable, flag ||| req}
   end
 
-  def acknowledge(%Interrupts{flag: flag} = intr, mask) do
-    Map.put(intr, :flag, flag - mask)
+  def acknowledge({enable, flag} = _intr, mask) do
+    {enable, flag - mask}
   end
 end
