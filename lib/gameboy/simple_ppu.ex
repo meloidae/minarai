@@ -197,45 +197,45 @@ defmodule Gameboy.SimplePpu do
   |> Enum.map(fn x -> (x &&& (1 <<< 3)) != 0 end)
   |> List.to_tuple()
 
-  def cycle(ppu, intr) do
-    if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu, intr), else: ppu
+  def cycle(ppu) do
+    if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu), else: {ppu, 0}
   end
 
-  defp do_cycle(%Ppu{} = ppu, intr) do
+  defp do_cycle(%Ppu{} = ppu) do
     counter = ppu.counter - 1
     if counter > 0 do
-      Map.put(ppu, :counter, counter)
+      {Map.put(ppu, :counter, counter), 0}
     else
       case ppu.mode do
         :oam_search ->
-          %{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}
+          {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
         :pixel_transfer ->
           # Draw line
           pixels = draw_scanline(ppu)
-          if elem(@hblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-          %{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}
+          req = if elem(@hblank_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+          {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}, req}
         :hblank ->
           new_ly = ppu.ly + 1
           if new_ly == 144 do
-            Interrupts.request(intr, :vblank)
-            if elem(@vblank_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
+            req = Interrupts.vblank()
+            req = if elem(@vblank_stat, ppu.lcds), do: Interrupts.stat() ||| req, else: req
+            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
             vblank(ppu)
-            %{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}
+            {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
           else
-            if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}
+            req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
+            {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}, req}
           end
         :vblank ->
           new_ly = ppu.ly + 1
           if new_ly == 153 do
-            if elem(@oam_stat, ppu.lcds), do: Interrupts.request(intr, :stat)
-            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            %{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}
+            req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
+            {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
           else
-            if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.request(intr, :stat)
-            %{ppu | counter: @vblank_cycles, ly: new_ly}
+            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat(), else: 0
+            {%{ppu | counter: @vblank_cycles, ly: new_ly}, req}
           end
       end
     end
@@ -296,9 +296,19 @@ defmodule Gameboy.SimplePpu do
     reduce_with_index(t, index + 1, reduce_fn.(h, index, acc), reduce_fn)
   end
 
-  defp compute_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu, sprite_list) do
+  defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = ppu) do
     sprite_size = elem(@obj_size, lcdc)
-    sprite_list
+    Memory.read_binary(oam, 0, @oam_size)
+    |> chunk([])
+    |> Enum.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
+    |> Enum.take(10)
+    |> Enum.filter(fn {_, x, _, _} ->
+      x > 0 and x < 168
+    end)
+    |> Enum.with_index()
+    |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
+      (x0 < x1) or (x0 === x1 and i0 > i1)
+    end)
     |> Enum.reduce(%{}, fn {{y, x, tile_id, flags}, _}, acc ->
       palette = if elem(@palette_flag, flags), do: obp1, else: obp0
       off_color = elem(@off_color, palette)
@@ -328,23 +338,6 @@ defmodule Gameboy.SimplePpu do
         end
       end)
     end)
-  end
-
-
-  defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly} = ppu) do
-    sprite_size = elem(@obj_size, lcdc)
-    sprite_list = Memory.read_binary(oam, 0, @oam_size)
-    |> chunk([])
-    |> Enum.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
-    |> Enum.take(10)
-    |> Enum.filter(fn {_, x, _, _} ->
-      x > 0 and x < 168
-    end)
-    |> Enum.with_index()
-    |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
-      (x0 < x1) or (x0 === x1 and i0 > i1)
-    end)
-    compute_sprite_map(ppu, sprite_list)
   end
 
   defp sprite_chunks(<<>>, _count, _size, _ly, sprites), do: sprites
@@ -519,6 +512,6 @@ defmodule Gameboy.SimplePpu do
     # sprites = Task.await_many(ppu.sprites)
     # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
-    send(Minarai, {:update, data})
+    # send(Minarai, {:update, data})
   end
 end

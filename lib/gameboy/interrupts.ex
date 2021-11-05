@@ -2,23 +2,31 @@ defmodule Gameboy.Interrupts do
   use Bitwise
   alias Gameboy.Interrupts
   alias Gameboy.Utils
-  # defstruct enable: nil,
-  #           flag: nil
 
-  @enable_index 1
-  @flag_index 2
+  defstruct enable: 0x00,
+            flag: 0x00
+
   def init do
-    :atomics.new(2, [signed: false])
+    %Interrupts{enable: 0x00, flag: 0x00}
   end
 
-  # def interrupt_enable(interrupts), do: interrupts.enable
-  # def interrupt_flag(interrupts), do: interrupts.flag
+  def interrupt_enable(intr), do: intr.enable
+  def set_interrupt_enable(intr, value), do: Map.put(intr, :enable, value)
 
-  def interrupt_enable(intr), do: :atomics.get(intr, @enable_index)
-  def set_interrupt_enable(intr, value), do: :atomics.put(intr, @enable_index, value)
+  def interrupt_flag(intr), do: intr.flag
+  def set_interrupt_flag(intr, value), do: Map.put(intr, :flag, value)
 
-  def interrupt_flag(intr), do: :atomics.get(intr, @flag_index)
-  def set_interrupt_flag(intr, value), do: :atomics.put(intr, @flag_index, value)
+  @vblank_bit 0b1
+  @stat_bit 0b10
+  @timer_bit 0b100
+  @serial_bit 0b1000
+  @joypad_bit 0b10000
+
+  def vblank, do: @vblank_bit
+  def stat, do: @stat_bit
+  def timer, do: @timer_bit
+  def serial, do: @serial_bit
+  def joypad, do: @joypad_bit
 
   @vblank 0..0xff
   |> Enum.map(fn x -> (x &&& 0b1) != 0 end)
@@ -36,11 +44,9 @@ defmodule Gameboy.Interrupts do
   |> Enum.map(fn x -> (x &&& 0b10000) != 0 end)
   |> List.to_tuple()
 
-  def check(intr) do
+  def check(%Interrupts{enable: enable, flag: flag} = _intr) do
     # Check if any enabled interrupt is requested
     # Interrupt priority: vblank > stat > timer > serial > joypad
-    enable = interrupt_enable(intr)
-    flag = interrupt_flag(intr)
     cond do
       elem(@vblank, enable) and elem(@vblank, flag) ->
         {0x40, 0b0000_0001}
@@ -57,33 +63,12 @@ defmodule Gameboy.Interrupts do
     end
   end
 
-  def request(intr, :vblank) do
-    flag = :atomics.get(intr, @flag_index)
-    if !elem(@vblank, flag), do: :atomics.add(intr, @flag_index, 0b0000_0001)
+  def request(intr, 0), do: intr
+  def request(%Interrupts{flag: flag} = intr, req) do
+    Map.put(intr, :flag, flag ||| req)
   end
 
-  def request(intr, :stat) do
-    flag = :atomics.get(intr, @flag_index)
-    if !elem(@stat, flag), do: :atomics.add(intr, @flag_index, 0b0000_0010)
-  end
-
-  def request(intr, :timer) do
-    flag = :atomics.get(intr, @flag_index)
-    if !elem(@timer, flag), do: :atomics.add(intr, @flag_index, 0b0000_0100)
-  end
-
-  def request(intr, :serial) do
-    flag = :atomics.get(intr, @flag_index)
-    if !elem(@serial, flag), do: :atomics.add(intr, @flag_index, 0b0000_1000)
-  end
-
-  def request(intr, :joypad) do
-    flag = :atomics.get(intr, @flag_index)
-    if !elem(@joypad, flag), do: :atomics.add(intr, @flag_index, 0b0001_0000)
-  end
-
-
-  def acknowledge(intr, mask) do
-    :atomics.sub(intr, @flag_index, mask)
+  def acknowledge(%Interrupts{flag: flag} = intr, mask) do
+    Map.put(intr, :flag, flag - mask)
   end
 end

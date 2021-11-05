@@ -36,13 +36,13 @@ defmodule Gameboy.Timer do
   defp check_counter_bit(counter, tac), do: (counter &&& elem(@counter_mask, tac)) != 0
 
   # Any read to a timer register requires updating counters first
-  def div_cycle(timer, intr) do
-    timer = cycle(timer, intr)
-    {timer.counter >>> 6, timer}
+  def div_cycle(timer) do
+    {timer, req} = cycle(timer)
+    {timer.counter >>> 6, timer, req}
   end
 
-  def set_div_cycle(timer, intr) do
-    timer = cycle(timer, intr)
+  def set_div_cycle(timer) do
+    {timer, req} = cycle(timer)
     # When writing to div, div is set to 0.
     # If the counter bit of div is 1, then its change to 0 causes a fallen edge, so tima is incremented
     timer = if check_counter_bit(timer.counter, timer.tac) do
@@ -55,46 +55,46 @@ defmodule Gameboy.Timer do
     else
       timer
     end
-    %{timer | counter: 0}
+    {%{timer | counter: 0}, req}
   end
 
-  def tima_cycle(timer, intr) do
-    timer = cycle(timer, intr)
-    {timer.tima, timer}
+  def tima_cycle(timer) do
+    {timer, req} = cycle(timer)
+    {timer.tima, timer, req}
   end
 
-  def set_tima_cycle(timer, intr, value) do
+  def set_tima_cycle(timer, value) do
     overflow = timer.overflow
-    timer = cycle(timer, intr)
+    {timer, req} = cycle(timer)
     if overflow do
       # In a cycle following the overflow, write to tima is ignored and overwritten by vaue in tma
-      timer
+      {timer, req}
     else
       # If write to tima occurs in a cycle of overflow, loading from tma in the following cycle is canceled
       # That is why overflow is set to false here
-      %{timer | tima: value, overflow: false}
+      {%{timer | tima: value, overflow: false}, req}
     end
   end
 
-  def tma_cycle(timer, intr) do
-    timer = cycle(timer, intr)
-    {timer.tma, timer}
+  def tma_cycle(timer) do
+    {timer, req} = cycle(timer)
+    {timer.tma, timer, req}
   end
 
-  def set_tma_cycle(timer, intr, value) do
+  def set_tma_cycle(timer, value) do
     overflow = timer.overflow
-    timer = cycle(timer, intr)
+    {timer, req} = cycle(timer)
     if overflow do
       # If tma is written in a cycle following an overflow, the new vaue of tma is loaded to tima
-      %{timer | tma: value, tima: value}
+      {%{timer | tma: value, tima: value}, req}
     else
-      %{timer | tma: value}
+      {%{timer | tma: value}, req}
     end
   end
 
-  def tac_cycle(timer, intr) do
-    timer = cycle(timer, intr)
-    {timer.tac, timer}
+  def tac_cycle(timer) do
+    {timer, req} = cycle(timer)
+    {timer.tac, timer, req}
   end
 
   @tac_value 0..0xff
@@ -103,8 +103,8 @@ defmodule Gameboy.Timer do
     0b11111000 ||| lower_bits
   end)
   |> List.to_tuple()
-  def set_tac_cycle(timer, intr, value) do
-    timer = cycle(timer, intr)
+  def set_tac_cycle(timer, value) do
+    {timer, req} = cycle(timer)
     old_bit = elem(@timer_enable, timer.tac) and check_counter_bit(timer.counter, timer.tac)
     new_tac = elem(@tac_value, value)
     new_bit = elem(@timer_enable, new_tac) and check_counter_bit(timer.counter, new_tac)
@@ -114,21 +114,20 @@ defmodule Gameboy.Timer do
     if old_bit and !new_bit do
       new_tima = timer.tima + 1
       if new_tima > 0xff do
-        %{timer | tima: 0, overflow: true, tac: new_tac}
+        {%{timer | tima: 0, overflow: true, tac: new_tac}, req}
       else
-        %{timer | tima: new_tima, tac: new_tac}
+        {%{timer | tima: new_tima, tac: new_tac}, req}
       end
     else
-      %{timer | tac: new_tac}
+      {%{timer | tac: new_tac}, req}
     end
   end
 
-  def cycle(timer, intr) do
+  def cycle(timer) do
     if timer.overflow do
       # Request interrupt
       # Timer interrupt and load from tma is delayed 1 cycle from an actual overflow
-      Interrupts.request(intr, :timer)
-      %{timer | counter: (timer.counter + 1) &&& 0xffff, tima: timer.tima, overflow: false}
+      {%{timer | counter: (timer.counter + 1) &&& 0xffff, tima: timer.tima, overflow: false}, Interrupts.timer()}
     else
       if elem(@timer_enable, timer.tac) and check_counter_bit(timer.counter, timer.tac) do
         new_counter = (timer.counter + 1) &&& 0xffff
@@ -136,18 +135,17 @@ defmodule Gameboy.Timer do
         if !check_counter_bit(new_counter, timer.tac) do
           new_tima = timer.tima + 1
           if new_tima > 0xff do # tima overflow
-            %{timer | counter: new_counter, tima: 0, overflow: true}
+            {%{timer | counter: new_counter, tima: 0, overflow: true}, 0}
           else
-            %{timer | counter: new_counter, tima: new_tima}
+            {%{timer | counter: new_counter, tima: new_tima}, 0}
           end
         else
-          %{timer | counter: (timer.counter + 1) &&& 0xffff}
+          {%{timer | counter: (timer.counter + 1) &&& 0xffff}, 0}
         end
       else
-        %{timer | counter: (timer.counter + 1) &&& 0xffff}
+        {%{timer | counter: (timer.counter + 1) &&& 0xffff}, 0}
       end
     end
-    # :atomics.add(timer.ref, 1, 1)
   end
 
 end

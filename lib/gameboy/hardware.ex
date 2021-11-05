@@ -147,19 +147,19 @@ defmodule Gameboy.Hardware do
         end
       0x04 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          timer_read_cycle(hw, fn timer, intr -> Timer.div_cycle(timer, intr) end)
+          timer_read_cycle(hw, fn timer -> Timer.div_cycle(timer) end)
         end
       0x05 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          timer_read_cycle(hw, fn timer, intr -> Timer.tima_cycle(timer, intr) end)
+          timer_read_cycle(hw, fn timer -> Timer.tima_cycle(timer) end)
         end
       0x06 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          timer_read_cycle(hw, fn timer, intr -> Timer.tma_cycle(timer, intr) end)
+          timer_read_cycle(hw, fn timer -> Timer.tma_cycle(timer) end)
         end
       0x07 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          timer_read_cycle(hw, fn timer, intr -> Timer.tac_cycle(timer, intr) end)
+          timer_read_cycle(hw, fn timer -> Timer.tac_cycle(timer) end)
         end
       0x0f ->
         defp _read_ff(hw, _addr, unquote(low)) do
@@ -317,18 +317,16 @@ defmodule Gameboy.Hardware do
       0x02 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :serial, Serial.set_serial_control(hw.serial, value)) end)
       0x04 ->
-        timer_write_cycle(hw, fn timer, intr -> Timer.set_div_cycle(timer, intr) end)
+        timer_write_cycle(hw, fn timer -> Timer.set_div_cycle(timer) end)
       0x05 ->
-        timer_write_cycle(hw, fn timer, intr -> Timer.set_tima_cycle(timer, intr, value) end)
+        timer_write_cycle(hw, fn timer -> Timer.set_tima_cycle(timer, value) end)
       0x06 ->
-        timer_write_cycle(hw, fn timer, intr -> Timer.set_tma_cycle(timer, intr, value) end)
+        timer_write_cycle(hw, fn timer -> Timer.set_tma_cycle(timer, value) end)
       0x07 ->
-        timer_write_cycle(hw, fn timer, intr -> Timer.set_tac_cycle(timer, intr, value) end)
+        timer_write_cycle(hw, fn timer -> Timer.set_tac_cycle(timer, value) end)
       0x0f ->
         memory_cycle(hw, fn hw ->
-          # IO.puts("IF 0x#{Utils.to_hex(value)}")
-          Interrupts.set_interrupt_flag(hw.intr, value)
-          hw
+          Map.put(hw, :intr, Interrupts.set_interrupt_flag(hw.intr, value))
         end)
       0x40 ->
         memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.set_lcd_control(hw.ppu, value)) end)
@@ -359,9 +357,7 @@ defmodule Gameboy.Hardware do
         # raise "Write to disable bootrom at #{Utils.to_hex(addr)} is unimplemented"
       0xff ->
         memory_cycle(hw, fn hw ->
-          # IO.puts("IE 0x#{Utils.to_hex(value)}")
-          Interrupts.set_interrupt_enable(hw.intr, value)
-          hw
+          Map.put(hw, :intr, Interrupts.set_interrupt_enable(hw.intr, value))
         end)
       x when 0x80 <= x and x <= 0xfe ->
         memory_cycle(hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
@@ -424,10 +420,11 @@ defmodule Gameboy.Hardware do
       {hw.ppu, hw.dma}
     end
     # ppu
-    ppu = Ppu.cycle(ppu, hw.intr)
+    {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    {value, timer} = timer_fn.(hw.timer, hw.intr)
-    {value, %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}}
+    {value, timer, timer_req} = timer_fn.(hw.timer)
+    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
+    {value, %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}}
   end
 
   defp timer_write_cycle(hw, timer_fn) do
@@ -441,10 +438,11 @@ defmodule Gameboy.Hardware do
       {hw.ppu, hw.dma}
     end
     # ppu
-    ppu = Ppu.cycle(ppu, hw.intr)
+    {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    timer = timer_fn.(hw.timer, hw.intr)
-    %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}
+    {timer, timer_req} = timer_fn.(hw.timer)
+    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
+    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}
   end
 
   def cycle(hw) do
@@ -458,10 +456,11 @@ defmodule Gameboy.Hardware do
       {hw.ppu, hw.dma}
     end
     # ppu
-    ppu = Ppu.cycle(ppu, hw.intr)
+    {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    timer = Timer.cycle(hw.timer, hw.intr)
-    %{hw | ppu: ppu, timer: timer, dma: dma, counter: hw.counter + 4}
+    {timer, timer_req} = Timer.cycle(hw.timer)
+    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
+    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}
   end
 
 end
