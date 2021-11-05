@@ -296,6 +296,9 @@ defmodule Gameboy.SimplePpu do
     reduce_with_index(t, index + 1, reduce_fn.(h, index, acc), reduce_fn)
   end
 
+  defp chunk(<<>>, acc), do: Enum.reverse(acc)
+  defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
+
   defp get_sprite_map(%Ppu{oam: oam, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = ppu) do
     sprite_size = elem(@obj_size, lcdc)
     Memory.read_binary(oam, 0, @oam_size)
@@ -339,20 +342,6 @@ defmodule Gameboy.SimplePpu do
       end)
     end)
   end
-
-  defp sprite_chunks(<<>>, _count, _size, _ly, sprites), do: sprites
-  defp sprite_chunks(_, 10, _size, _ly, sprites), do: sprites
-  defp sprite_chunks(<<h::binary-size(4), rest::binary>>, count, ly, size, sprites) do
-    <<y, _::binary>> = h
-    if ((ly - y + 16) &&& 0xff) < size do
-      sprite_chunks(rest, count + 1, ly, size, [h | sprites])
-    else
-      sprite_chunks(rest, count, ly, size, sprites)
-    end
-  end
-
-  defp chunk(<<>>, acc), do: Enum.reverse(acc)
-  defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
 
   defp draw_scanline(ppu) do
     scanline(ppu)
@@ -404,7 +393,7 @@ defmodule Gameboy.SimplePpu do
   end
 
   defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, bgp: bgp} = ppu) do
-    sprites = get_sprite_map(ppu)
+    sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
 
     y = scy + ly
 
@@ -512,6 +501,6 @@ defmodule Gameboy.SimplePpu do
     # sprites = Task.await_many(ppu.sprites)
     # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
-    send(Minarai, {:update, data})
+    # send(Minarai, {:update, data})
   end
 end

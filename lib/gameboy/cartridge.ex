@@ -53,14 +53,15 @@ defmodule Gameboy.Cartridge do
     mbc = case Memory.read(memory, @cart_type) do
       0x00 ->
         %{type: :nombc}
-      x when 0x01 in [0x01, 0x02, 0x03] ->
+      x when x in [0x01, 0x02, 0x03] ->
         %{type: :mbc1, mode: :simple_rom_bank, bank1: 0x01, bank2: 0x00, rom: {0x0000, 0x4000}, ram: 0x00, ram_enable: false}
       x ->
         raise "cart_type = 0x#{Utils.to_hex(x)} is not implemented"
     end
-    IO.puts("Cartridge mbc: #{inspect(mbc)}")
     rom = init_rom(memory)
     ram = init_ram(mbc, memory)
+    IO.puts("Cartridge mbc: #{inspect(mbc)}")
+    IO.puts("ROM banks: #{div(rom.size, @bank_size)}")
     %Cartridge{mbc: mbc, rom: rom, ram: ram}
   end
 
