@@ -2,12 +2,12 @@
 
 WIP: gameboy emulator
 
-Nothing works yet
+Can get through Bootrom
 
 
 ## TODO
 - [x] bg rendering
-- [ ] obj rendering
+- [x] obj rendering
 - [ ] window rendering
 - [ ] oam dma transfer
 - [ ] start from commandline (not iex)
@@ -31,6 +31,10 @@ Lower nibble of F register is always zero
 
 halt bug
 - Occurs on halt instruction when ime=false and IE & IF != 0
+
+Always do wrapping add when adding the scroll value
+- e.g. `(ly + scy) &&& 0xff`
+- Results of blargg's tests wasn't showing up because ly + scy became greater than 0xff
 
 
 ## blargg tests
