@@ -501,6 +501,6 @@ defmodule Gameboy.SimplePpu do
     # sprites = Task.await_many(ppu.sprites)
     # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
-    # send(Minarai, {:update, data})
+    send(Minarai, {:update, data})
   end
 end
