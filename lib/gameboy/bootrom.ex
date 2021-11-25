@@ -1,12 +1,9 @@
 defmodule Gameboy.Bootrom do
   alias Gameboy.Bootrom
   alias Gameboy.Memory
-  alias Gameboy.EtsMemory
-  defstruct memory: struct(Memory), active: false
-  # defstruct memory: struct(EtsMemory), active: false
+  alias Gameboy.TupleMemory
 
   @path "roms/DMG_ROM.bin"
-  # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
 
   def init(path \\ nil) do
     path = if is_nil(path) do
@@ -17,22 +14,18 @@ defmodule Gameboy.Bootrom do
       path
     end
     data = File.read!(path)
-    %Bootrom{memory: %Memory{data: data}, active: true}
-    # %Bootrom{memory: EtsMemory.init_from_binary(:bootrom, data), active: true}
+    # %Bootrom{memory: %Memory{data: data}, active: true}
+    # %Bootrom{memory: TupleMemory.init(data), active: true}
+    {TupleMemory.init(data), true}
   end
+
+  def active({_memory, active} = _bootrom), do: active
 
   # Non-zero value disables bootrom
-  def set_enable(bootrom, value), do: Map.put(bootrom, :active, value == 0)
+  # def set_enable(bootrom, value), do: Map.put(bootrom, :active, value == 0)
+  def set_enable({memory, _active}, value), do: {memory, value == 0}
 
-  def read(%{memory: memory} = _bootrom, addr), do: Memory.read(memory, addr)
-  # def read(%{memory: memory} = _bootrom, addr), do: EtsMemory.read(memory, addr)
-
-  def write(%{memory: memory} = bootrom, addr, data) do
-    Map.put(bootrom, :memory, Memory.write(memory, addr, data))
-  end
-
-  # def write(%{memory: memory} = bootrom, addr, data) do
-  #   EtsMemory.write(memory, addr, data)
-  #   bootrom
-  # end
+  # def read(%{memory: memory} = _bootrom, addr), do: Memory.read(memory, addr)
+  # def read(%{memory: memory} = _bootrom, addr), do: TupleMemory.read(memory, addr)
+  def read({memory, _active} = _bootrom, addr), do: TupleMemory.read(memory, addr)
 end
