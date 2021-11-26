@@ -34,7 +34,7 @@ defmodule Gameboy.SimplePpu do
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
-    if (x &&& (1 <<< 6)) != 0, do: 0x9c00, else: 0x9800
+    if (x &&& (1 <<< 6)) != 0, do: 0x1c00, else: 0x1800
   end)
   |> List.to_tuple()
   @window_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
@@ -51,12 +51,9 @@ defmodule Gameboy.SimplePpu do
   @obj_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 1)) != 0 end) |> List.to_tuple()
   @bg_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
 
-  @sprite_table_name :sprites
-
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    # :ets.new(@sprite_table_name, [:named_table])
     %Ppu{vram: vram, oam: oam, counter: 0}
   end
 
@@ -364,39 +361,46 @@ defmodule Gameboy.SimplePpu do
     zip_map(t1, t2, [map_fn.(h1, h2) | acc], map_fn)
   end
 
-  def zip_chunk_map(_, _, acc, _), do: Enum.reverse(acc)
-  def zip_chunk_map([], _, acc, _, _), do: Enum.reverse(acc)
-  def zip_chunk_map(_, [], acc, _, _), do: Enum.reverse(acc)
-  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7, h8 | t], acc, remainder, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7, h8]) | acc], remainder, map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7 | t], acc, 7, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6 | t], acc, 6, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5 | t], acc, 5, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2, h3, h4 | t], acc, 4, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2, h3 | t], acc, 3, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1, h2 | t], acc, 2, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2]) | acc], map_fn)
-  end
-  def zip_chunk_map([hh | tt], [h1 | t], acc, 1, map_fn) do
-    zip_chunk_map(tt, t, [map_fn.(hh, [h1]) | acc], map_fn)
-  end
+  # def zip_chunk_map(_, _, acc, _), do: Enum.reverse(acc)
+  # def zip_chunk_map([], _, acc, _, _), do: Enum.reverse(acc)
+  # def zip_chunk_map(_, [], acc, _, _), do: Enum.reverse(acc)
+  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7, h8 | t], acc, remainder, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7, h8]) | acc], remainder, map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7 | t], acc, 7, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6 | t], acc, 6, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5 | t], acc, 5, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4 | t], acc, 4, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2, h3 | t], acc, 3, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1, h2 | t], acc, 2, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2]) | acc], map_fn)
+  # end
+  # def zip_chunk_map([hh | tt], [h1 | t], acc, 1, map_fn) do
+  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1]) | acc], map_fn)
+  # end
 
-  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, bgp: bgp} = ppu) do
+  @x_coords 0..7
+  |> Enum.map(fn x ->
+    start = -x
+    start..159
+    |> Enum.chunk_every(8)
+  end)
+  |> List.to_tuple()
+
+  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, bgp: bgp} = ppu) do
     sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
 
-    y = scy + ly
-
+    y = (scy + ly) &&& 0xff
     # Render background
     tile_line = rem(y, 8) * 2
     row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
@@ -405,9 +409,10 @@ defmodule Gameboy.SimplePpu do
     num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
     off_color = elem(@off_color, bgp)
     # x coordinates on screen
-    x_coords = -scx_offset..159
-               |> Enum.to_list()
+    # x_coords = -scx_offset..159
+    #            |> Enum.to_list()
          # |> Enum.chunk_every(8)
+    x_coords = elem(@x_coords, scx_offset)
 
     tile_row_fn = if elem(@tile_data_addr, lcdc) do
       # 0x8000 address mode
@@ -420,7 +425,8 @@ defmodule Gameboy.SimplePpu do
     end
 
     Memory.read_range(vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-    |> zip_chunk_map(x_coords, [], scx_offset, fn tile_id, xs ->
+    # |> zip_chunk_map(x_coords, [], scx_offset, fn tile_id, xs ->
+    |> zip_map(x_coords, [], fn tile_id, xs ->
       tile_row_fn.(tile_id)
       |> zip_map(xs, [], fn p, x ->
         if x < 0 do
@@ -441,6 +447,31 @@ defmodule Gameboy.SimplePpu do
     end)
   end
 
+  defp mix_pixels(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
+    y = (scy + ly) &&& 0xff
+    tile_line = rem(y, 8) * 2
+    bg_row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
+    bg_tile_index = div(scx, 8) &&& 0x1f
+    scx_offset = rem(scx, 8)
+    bg_num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
+    off_color = elem(@off_color, bgp)
+
+    bg_tile_row_fn = if elem(@tile_data_addr, lcdc) do
+      # 0x8000 address mode
+      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + tile_line, 16)) end
+    else
+      # 0x8800 address mode
+      fn tile_id ->
+        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
+      end
+    end
+    
+    win_y = ly - wy
+    win_x = (wx - 7) &&& 0xff
+    win_tile_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
+    win_tile_index = div(scx, 8) &&& 0x1f
+  end
+
   defp map_no_reverse([], acc, _), do: acc
   defp map_no_reverse([h | t], acc, map_fn) do
     map_no_reverse(t, [map_fn.(h) | acc], map_fn)
@@ -451,50 +482,6 @@ defmodule Gameboy.SimplePpu do
     # |> Enum.map(&(List.duplicate(&1, n)))
     |> map_no_reverse([], &(List.duplicate(&1, n)))
     |> List.flatten()
-  end
-
-  defp scanline_flat(ppu) do
-    sprites = get_sprite_map(ppu)
-
-    lcdc = ppu.lcdc
-    y = ppu.scy + ppu.ly
-
-    # Render background
-    tile_line = rem(y, 8) * 2
-    row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
-    tile_index = div(ppu.scx, 8) &&& 0x1f
-    scx_offset = rem(ppu.scx, 8)
-    num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
-    off_color = elem(@off_color, ppu.bgp)
-    # x coordinates on screen
-    # x_coords = -scx_offset..159
-
-    tile_row_fn = if elem(@tile_data_addr, lcdc) do
-      fn tile_id -> elem(@tile_bytes, Memory.read_int(ppu.vram, (tile_id * 16) + tile_line, 16)) end
-    else
-      fn tile_id ->
-        elem(@tile_bytes, Memory.read_int(ppu.vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
-      end
-    end
-
-    Memory.read_range(ppu.vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-    # |> Enum.map(tile_row_fn)
-    |> map_no_reverse([], tile_row_fn)
-    |> repeat_tiles(8)
-    |> Stream.drop(scx_offset)
-    |> Stream.zip(0..159)
-    |> Enum.map(fn {p, x} -> 
-      case Map.get(sprites, x) do
-        {sp, true} ->
-          bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-          if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-        {sp, _} ->
-          elem(@color, sp)
-        _ ->
-          bg_pixel = (ppu.bgp >>> (p * 2)) &&& 0x3
-          elem(@color, bg_pixel)
-      end
-    end)
   end
 
   defp vblank(ppu) do
