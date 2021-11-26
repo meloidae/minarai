@@ -42,5 +42,6 @@ Always do wrapping add when adding the scroll value
 
 ## Screenshots
 ![screenshot](README/ss_pikachu.png)
+
 At the moment, it reaches the title screen of Pokemon Yellow without crashing.  
 Still has some graphical glitches and the frame rate fluctuates quite a bit (40-80fps).
