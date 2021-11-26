@@ -337,7 +337,7 @@ defmodule Gameboy.SimplePpu do
         if color === off_color do
           m
         else
-          Map.put(m, x + i + 8, {color, prioritize_bg})
+          Map.put(m, (x + i - 8) &&& 0xff, {color, prioritize_bg})
         end
       end)
     end)
