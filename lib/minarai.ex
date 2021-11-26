@@ -127,6 +127,24 @@ defmodule Minarai do
     {:noreply, state}
   end
 
+  @s_key 83
+  def handle_event({:wx, _, _, _,
+    {:wxKey, :key_down, _x, _y, @s_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+  }, state) do
+    pid = state.pid
+    send(pid, :save)
+    {:noreply, state}
+  end
+
+  @l_key 76
+  def handle_event({:wx, _, _, _,
+    {:wxKey, :key_down, _x, _y, @l_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+  }, state) do
+    pid = state.pid
+    send(pid, :load)
+    {:noreply, state}
+  end
+
   def handle_event({:wx, _, _, _, _} = msg, state) do
     # cond do
     #   elem(event, 0) == :wxKey ->
