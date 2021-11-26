@@ -89,18 +89,17 @@ defmodule Minarai do
   #   {:noreply, state}
   # end
 
-  def handle_info({:update, buffer}, state) do
+  def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time} = state) do
     curr_time = System.monotonic_time()
-    fps = if !is_nil(state.prev_time) do
-      diff = System.convert_time_unit(curr_time - state.prev_time, :native, :microsecond)
-      1_000_000 / diff
+    fps = if !is_nil(prev_time) do
+      diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
+      fps = 1_000_000 / diff
+      :wxTopLevelWindow.setTitle(frame, "#{@title} (FPS: #{Float.round(fps, 2)})")
+      fps
     else
       nil
     end
     state = %{state | buffer: buffer, prev_time: curr_time, fps: fps}
-    if !is_nil(fps) do
-      :wxTopLevelWindow.setTitle(state.frame, "FPS: #{fps}")
-    end
     :wx.batch(fn -> render(state) end)
     {:noreply, state}
   end
@@ -158,11 +157,11 @@ defmodule Minarai do
     end)
   end
 
-  defp modify_binary(bin) do
-    index = (:rand.uniform(@width * @height) - 1) * 3
-    <<first::binary-size(index), _::binary-size(3), rest::binary>> = bin
-    first <> <<0, 0, 0>> <> rest
-  end
+  # defp modify_binary(bin) do
+  #   index = (:rand.uniform(@width * @height) - 1) * 3
+  #   <<first::binary-size(index), _::binary-size(3), rest::binary>> = bin
+  #   first <> <<0, 0, 0>> <> rest
+  # end
 
   defp load_texture(buffer) do
     # Generate texture id
@@ -246,48 +245,34 @@ defmodule Minarai do
     :ok
   end
 
-  defp draw_texture(x, y, %{tex_id: tex_id, w: w, h: h, minx: minx, miny: miny, maxx: maxx, maxy: maxy}) do
+  defp draw_texture(x, y, %{tex_id: tex_id, w: w, h: h}) do
     :gl.clear(Bitwise.bor(:gl_const.gl_color_buffer_bit, :gl_const.gl_depth_buffer_bit))
     :gl.loadIdentity()
     :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
     :gl.scalef(@scale / 0.5, @scale / 0.5, 0.0)
     :gl.'begin'(:gl_const.gl_triangle_strip)
     :gl.texCoord2f(0.0, 0.0)
-    # :gl.texCoord2f(0.0, 1.0)
     :gl.vertex2i(x, y)
     :gl.texCoord2f(1.0, 0.0)
-    # :gl.texCoord2f(1.0, 1.0)
     :gl.vertex2i(x + div(w, 2), y)
     :gl.texCoord2f(0.0, 1.0)
-    # :gl.texCoord2f(0.0, 0.0)
     :gl.vertex2i(x, y + div(h, 2))
     :gl.texCoord2f(1.0, 1.0)
-    # :gl.texCoord2f(1.0, 0.0)
     :gl.vertex2i(x + div(w, 2), y + div(h, 2))
     :gl.'end'()
     :ok
   end
 
 
-  defp render(%{canvas: canvas} = state) do
+  defp render(%{canvas: canvas, texture: texture, buffer: buffer} = _state) do
     # Update texture with new screen buffer
     :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
       0, 0,
       @width, @height,
       :gl_const.gl_rgb,
       :gl_const.gl_unsigned_byte,
-      state.buffer)
-    # Add number to texture
-    # if !is_nil(state.fps) do
-    #   number = Minarai.Text.number_binary(state.fps)
-    #   :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
-    #     15 - number.w, 0,
-    #     number.w, number.h,
-    #     :gl_const.gl_rgb,
-    #     :gl_const.gl_unsigned_byte,
-    #     number.buffer)
-    # end
-    draw_texture(0, 0, state.texture)
+      buffer)
+    draw_texture(0, 0, texture)
     :wxGLCanvas.swapBuffers(canvas)
     :ok
   end

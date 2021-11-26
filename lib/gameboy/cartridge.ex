@@ -3,6 +3,7 @@ defmodule Gameboy.Cartridge do
   alias Gameboy.Cartridge
   alias Gameboy.Memory
   alias Gameboy.Utils
+  alias Gameboy.TupleMemory
 
   defstruct mbc: :nombc,
             rom: %{memory: struct(Memory), offset: 0x4000},
@@ -11,9 +12,9 @@ defmodule Gameboy.Cartridge do
   # @path "roms/Upwell.gb"
   # @path "roms/flappyboy.gb"
   # @path "roms/2048.gb"
-  @path "roms/carazu.gb"
+  # @path "roms/carazu.gb"
   # @path "roms/SIKAKUJOSIKBJ3J.gb"
-  # @path "roms/POKEMON_YELLOW.sgb"
+  @path "roms/POKEMON_YELLOW.sgb"
   # @path "roms/tests/blargg/cpu_instrs/cpu_instrs.gb"
   # @path "roms/tests/blargg/instr_timing/instr_timing.gb"
   # @path "roms/tests/blargg/mem_timing/mem_timing.gb"
@@ -55,7 +56,7 @@ defmodule Gameboy.Cartridge do
     mbc = case Memory.read(memory, @cart_type) do
       0x00 ->
         %{type: :nombc}
-      x when x in [0x01, 0x02, 0x03] ->
+      x when x in 0x01..0x03 ->
         %{type: :mbc1, mode: :simple_rom_bank, bank1: 0x01, bank2: 0x00, rom: {0x0000, 0x4000}, ram: 0x00, ram_enable: false}
       x when x in 0x0f..0x13 ->
         %{type: :mbc3, rom: 0x4000, ram: 0x00, ram_rtc_enable: false, rtc_s: 0x00, rtc_m: 0x00, rtc_h: 0x00, rtc_dl: 0x00, rtc_dh: 0x00, latch_clock: nil}
@@ -65,30 +66,15 @@ defmodule Gameboy.Cartridge do
     rom = init_rom(memory)
     ram = init_ram(mbc, memory)
     IO.puts("Cartridge mbc: #{inspect(mbc)}")
-    IO.puts("ROM banks: #{div(rom.size, @bank_size)}")
+    IO.puts("ROM banks: #{div(tuple_size(rom), @bank_size)}")
     %Cartridge{mbc: mbc, rom: rom, ram: ram}
   end
 
-  defp init_rom(rom_memory) do
+  def init_rom(%{data: data} = rom_memory) do
+    tuple_memory = TupleMemory.init(data)
     case Memory.read(rom_memory, @rom_size) do
-      0x00 ->
-        %{memory: rom_memory, size: 2 * @bank_size}
-      0x01 ->
-        %{memory: rom_memory, size: 4 * @bank_size}
-      0x02 ->
-        %{memory: rom_memory, size: 8 * @bank_size}
-      0x03 ->
-        %{memory: rom_memory, size: 16 * @bank_size}
-      0x04 ->
-        %{memory: rom_memory, size: 32 * @bank_size}
-      0x05 ->
-        %{memory: rom_memory, size: 64 * @bank_size}
-      0x06 ->
-        %{memory: rom_memory, size: 128 * @bank_size}
-      0x07 ->
-        %{memory: rom_memory, size: 256 * @bank_size}
-      0x08 ->
-        %{memory: rom_memory, size: 512 * @bank_size}
+      x when x in 0x00..0x08 ->
+        tuple_memory
       size ->
         raise "rom_size = 0x#{Utils.to_hex(size)} is not implemented"
     end
@@ -113,27 +99,25 @@ defmodule Gameboy.Cartridge do
     end
   end
 
-  def read_rom_low(%{mbc: mbc, rom: rom, ram: ram} = cart, addr) do
-    case mbc do
-      %{type: :nombc} -> # No Mbc, so just read from specified address
-        Memory.read(rom.memory, addr)
-      %{type: :mbc1, rom: {low_offset, _high_offset}} ->
-        Memory.read(rom.memory, low_offset ||| (addr &&& @bank_mask))
-      %{type: :mbc3} ->
-        Memory.read(rom.memory, addr)
-      _ ->
-        raise "Read rom low for mbc #{inspect(mbc)} is unimplemented"
-    end
+  def read_rom_low(%{mbc: %{type: :nombc}, rom: rom}, addr) do
+    # No Mbc, so just read from specified address
+    TupleMemory.read(rom, addr)
+  end
+  def read_rom_low(%{mbc: %{type: :mbc1, rom: {low_offset, _high_offset}}, rom: rom}, addr) do
+    TupleMemory.read(rom, low_offset ||| (addr &&& @bank_mask))
+  end
+  def read_rom_low(%{mbc: %{type: :mbc3}, rom: rom}, addr) do
+    TupleMemory.read(rom, addr)
   end
 
   def read_rom_high(%{mbc: mbc, rom: rom} = cart, addr) do
     case mbc do
       %{type: :nombc} -> # No Mbc, so just read from specified address
-        Memory.read(rom.memory, addr)
+        TupleMemory.read(rom, addr)
       %{type: :mbc1, rom: {_low_offset, high_offset}} ->
-        Memory.read(rom.memory, high_offset ||| (addr &&& @bank_mask))
+        TupleMemory.read(rom, high_offset ||| (addr &&& @bank_mask))
       %{type: :mbc3, rom: offset} ->
-        Memory.read(rom.memory, offset ||| (addr &&& @bank_mask))
+        TupleMemory.read(rom, offset ||| (addr &&& @bank_mask))
       _ ->
         raise "Read rom high for mbc #{inspect(mbc)} is unimplemented"
     end
@@ -142,11 +126,11 @@ defmodule Gameboy.Cartridge do
   def read_binary_rom_low(%{mbc: mbc, rom: rom, ram: ram} = cart, addr, len) do
     case mbc do
       %{type: :nombc} -> # No Mbc, so just read from specified address
-        Memory.read_binary(rom.memory, addr, len)
+        TupleMemory.read_binary(rom, addr, len)
       %{type: :mbc1, rom: {low_offset, _high_offset}} ->
-        Memory.read_binary(rom.memory, low_offset ||| (addr &&& @bank_mask), len)
+        TupleMemory.read_binary(rom, low_offset ||| (addr &&& @bank_mask), len)
       %{type: :mbc3} ->
-        Memory.read_binary(rom.memory, addr, len)
+        TupleMemory.read_binary(rom, addr, len)
       _ ->
         raise "Read binary rom low for mbc #{inspect(mbc)} is unimplemented"
     end
@@ -155,11 +139,11 @@ defmodule Gameboy.Cartridge do
   def read_binary_rom_high(%{mbc: mbc, rom: rom} = cart, addr, len) do
     case mbc do
       %{type: :nombc} -> # No Mbc, so just read from specified address
-        Memory.read_binary(rom.memory, addr, len)
+        TupleMemory.read_binary(rom, addr, len)
       %{type: :mbc1, rom: {_low_offset, high_offset}} ->
-        Memory.read_binary(rom.memory, high_offset ||| (addr &&& @bank_mask), len)
+        TupleMemory.read_binary(rom, high_offset ||| (addr &&& @bank_mask), len)
       %{type: :mbc3, rom: offset} ->
-        Memory.read_binary(rom.memory, offset ||| (addr &&& @bank_mask), len)
+        TupleMemory.read_binary(rom, offset ||| (addr &&& @bank_mask), len)
       _ ->
         raise "Read binary rom high for mbc #{inspect(mbc)} is unimplemented"
     end
@@ -179,7 +163,7 @@ defmodule Gameboy.Cartridge do
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0b, rtc_dl: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0c, rtc_dh: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: bank}, ram: ram}, addr) do
-    Memory.read_array(ram.memory, bank, addr &&& (ram.meomry[0].size - 1))
+    Memory.read_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1))
   end
 
   def write_ram(%{mbc: %{type: :nombc}, ram: ram} = cart, addr, value) do
@@ -274,13 +258,13 @@ defmodule Gameboy.Cartridge do
   end
 
   defp mbc1_set_bank(%{mbc: %{mode: mode, bank1: bank1, bank2: bank2} = mbc, rom: rom, ram: ram} = cart) do
-    rom_high = (((bank2 <<< 5) ||| bank1) * 0x4000) &&& (rom.size - 1) 
+    rom_high = (((bank2 <<< 5) ||| bank1) * 0x4000) &&& (tuple_size(rom) - 1) 
     {rom_low, ram_bank} = if mode == :simple_rom_bank do
         # Only does regular rom banking
         {0x0000, 0x00}
     else
         # 0x0000-0x3ffff of ROM & RAM is affected by bank2
-        {((bank2 <<< 5) * 0x4000) &&& (rom.size - 1), bank2 &&& (Memory.array_size(ram.memory) - 1)}
+        {((bank2 <<< 5) * 0x4000) &&& (tuple_size(rom) - 1), bank2 &&& (Memory.array_size(ram.memory) - 1)}
     end
     %{mbc | rom: {rom_low, rom_high}, ram: ram_bank}
   end
