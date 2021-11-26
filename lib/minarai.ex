@@ -46,6 +46,7 @@ defmodule Minarai do
     texture = load_texture(buffer)
 
     state = %{
+      frame: frame,
       canvas: canvas,
       # timer: timer,
       texture: texture,
@@ -97,6 +98,9 @@ defmodule Minarai do
       nil
     end
     state = %{state | buffer: buffer, prev_time: curr_time, fps: fps}
+    if !is_nil(fps) do
+      :wxTopLevelWindow.setTitle(state.frame, "FPS: #{fps}")
+    end
     :wx.batch(fn -> render(state) end)
     {:noreply, state}
   end
@@ -274,15 +278,15 @@ defmodule Minarai do
       :gl_const.gl_unsigned_byte,
       state.buffer)
     # Add number to texture
-    if !is_nil(state.fps) do
-      number = Minarai.Text.number_binary(state.fps)
-      :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
-        15 - number.w, 0,
-        number.w, number.h,
-        :gl_const.gl_rgb,
-        :gl_const.gl_unsigned_byte,
-        number.buffer)
-    end
+    # if !is_nil(state.fps) do
+    #   number = Minarai.Text.number_binary(state.fps)
+    #   :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
+    #     15 - number.w, 0,
+    #     number.w, number.h,
+    #     :gl_const.gl_rgb,
+    #     :gl_const.gl_unsigned_byte,
+    #     number.buffer)
+    # end
     draw_texture(0, 0, state.texture)
     :wxGLCanvas.swapBuffers(canvas)
     :ok
