@@ -18,6 +18,16 @@ defmodule Gameboy do
 
   # def step(%{cpu: cpu, hw: hw} = gb) do
   def step({cpu, hw} = _gb) do
+    {cpu, hw} = receive do
+      :save ->
+        save_state({cpu, hw})
+        {cpu, hw}
+      :load ->
+        load_state()
+    after
+      0 ->
+        {cpu, hw}
+    end
     # Handle interrupts
     {cpu, hw} = handle_interrupt(cpu, hw)
     case cpu.state do
@@ -77,13 +87,16 @@ defmodule Gameboy do
   end
 
   def save_state(gb, path \\ "state.gb") do
+    IO.puts("Saving the game state to #{path}")
     File.write!(path, :erlang.term_to_binary(gb), [:write])
   end
 
   def load_state(path \\ "state.gb") do
-    path
-    |> File.read!()
-    |> :erlang.binary_to_term()
+    state = path 
+            |> File.read!()
+            |> :erlang.binary_to_term()
+    IO.puts("Loading the game state from #{path}")
+    state
   end
 
 end

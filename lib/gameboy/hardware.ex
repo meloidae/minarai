@@ -70,8 +70,7 @@ defmodule Gameboy.Hardware do
     }
   end
 
-  # defp _read(%Hardware{bootrom: bootrom} = hw, addr, 0x00) when bootrom.active do
-  defp _read(%Hardware{bootrom: bootrom} = hw, addr, 0x00) when elem(bootrom, 1) do
+  defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
     memory_cycle(hw, fn hw -> {Bootrom.read(bootrom, addr), hw} end)
   end
   for high <- 0..0xff do
