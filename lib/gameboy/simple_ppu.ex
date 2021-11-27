@@ -155,7 +155,7 @@ defmodule Gameboy.SimplePpu do
   def ob_palette0(ppu), do: ppu.obp0
   def set_ob_palette0(ppu, value), do: Map.put(ppu, :obp0, value)
   def ob_palette1(ppu), do: ppu.obp1
-  def set_ob_palette1(ppu, value), do: Map.put(ppu, :obp0, value)
+  def set_ob_palette1(ppu, value), do: Map.put(ppu, :obp1, value)
 
   def scroll_y(%Ppu{scy: scy} = _ppu), do: scy
   def set_scroll_y(%Ppu{} = ppu, value), do: Map.put(ppu, :scy, value &&& 0xff)
