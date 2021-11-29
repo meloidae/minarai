@@ -268,7 +268,7 @@ defmodule Gameboy.SimplePpu do
   |> List.to_tuple()
 
   @off_color 0..0xff
-  |> Enum.map(fn x -> (x &&& 0x03) end)
+  |> Enum.map(fn x -> x &&& 0x03 end)
   |> List.to_tuple()
 
   @prioritize_bg 0..0xff
@@ -311,7 +311,6 @@ defmodule Gameboy.SimplePpu do
     end)
     |> Enum.reduce(%{}, fn {{y, x, tile_id, flags}, _}, acc ->
       palette = if elem(@palette_flag, flags), do: obp1, else: obp0
-      off_color = elem(@off_color, palette)
       prioritize_bg = elem(@prioritize_bg, flags)
       # Vertical flip
       line = if elem(@flip_y, flags) do
@@ -327,13 +326,11 @@ defmodule Gameboy.SimplePpu do
       else
         elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
       end
-      # |> Enum.with_index()
-      # |> Enum.reduce(acc, fn {p, i}, m ->
       |> reduce_with_index(0, acc, fn p, i, m ->
-        color = (palette >>> (p * 2)) &&& 0x3
-        if color === off_color do
+        if p === 0 do
           m
         else
+          color = (palette >>> (p * 2)) &&& 0x3
           Map.put(m, (x + i - 8) &&& 0xff, {color, prioritize_bg})
         end
       end)
@@ -399,6 +396,7 @@ defmodule Gameboy.SimplePpu do
 
   defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, bgp: bgp} = ppu) do
     sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
+    sp_pixel_count = map_size(sprites)
 
     y = (scy + ly) &&& 0xff
     # Render background
@@ -429,19 +427,23 @@ defmodule Gameboy.SimplePpu do
     |> zip_map(x_coords, [], fn tile_id, xs ->
       tile_row_fn.(tile_id)
       |> zip_map(xs, [], fn p, x ->
-        if x < 0 do
-          []
-        else
-          case Map.get(sprites, x) do
-            {sp, true} ->
-              bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-              if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-            {sp, _} ->
-              elem(@color, sp)
-            _ ->
-              bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-              elem(@color, bg_pixel)
-          end
+        cond do
+          x < 0 ->
+            []
+          sp_pixel_count === 0 ->
+            bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+            elem(@color, bg_pixel)
+          true ->
+            case sprites do
+              %{^x => {sp, true}} ->
+                bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
+              %{^x => {sp, _}} ->
+                elem(@color, sp)
+              _ ->
+                bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+                elem(@color, bg_pixel)
+            end
         end
       end)
     end)
