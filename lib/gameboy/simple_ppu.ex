@@ -198,43 +198,78 @@ defmodule Gameboy.SimplePpu do
     if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu), else: {ppu, 0}
   end
 
-  defp do_cycle(%Ppu{} = ppu) do
-    counter = ppu.counter - 1
-    if counter > 0 do
-      {Map.put(ppu, :counter, counter), 0}
+  # defp do_cycle(%Ppu{} = ppu) do
+  #   counter = ppu.counter - 1
+  #   if counter > 0 do
+  #     {Map.put(ppu, :counter, counter), 0}
+  #   else
+  #     case ppu.mode do
+  #       :oam_search ->
+  #         {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
+  #       :pixel_transfer ->
+  #         # Draw line
+  #         pixels = draw_scanline(ppu)
+  #         req = if elem(@hblank_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+  #         {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}, req}
+  #       :hblank ->
+  #         new_ly = ppu.ly + 1
+  #         if new_ly == 144 do
+  #           req = Interrupts.vblank()
+  #           req = if elem(@vblank_stat, ppu.lcds), do: Interrupts.stat() ||| req, else: req
+  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
+  #           vblank(ppu)
+  #           {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
+  #         else
+  #           req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
+  #           {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}, req}
+  #         end
+  #       :vblank ->
+  #         new_ly = ppu.ly + 1
+  #         if new_ly == 153 do
+  #           req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
+  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
+  #           {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
+  #         else
+  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat(), else: 0
+  #           {%{ppu | counter: @vblank_cycles, ly: new_ly}, req}
+  #         end
+  #     end
+  #   end
+  # end
+
+  defp do_cycle(%Ppu{counter: counter} = ppu) when counter > 1, do: {Map.put(ppu, :counter, counter - 1), 0}
+  defp do_cycle(%Ppu{counter: _, mode: :oam_search} = ppu) do
+    {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
+  end
+  defp do_cycle(%Ppu{counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer} = ppu) do
+    pixels = draw_scanline(ppu)
+    req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
+    {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [buffer | pixels]}, req}
+  end
+  defp do_cycle(%Ppu{counter: _, mode: :hblank, lcds: lcds, ly: ly, lyc: lyc} = ppu) do
+    new_ly = ly + 1
+    if new_ly == 144 do
+      req = Interrupts.vblank()
+      req = if elem(@vblank_stat, lcds), do: Interrupts.stat() ||| req, else: req
+      req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+      vblank(ppu)
+      {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
     else
-      case ppu.mode do
-        :oam_search ->
-          {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
-        :pixel_transfer ->
-          # Draw line
-          pixels = draw_scanline(ppu)
-          req = if elem(@hblank_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-          {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}, req}
-        :hblank ->
-          new_ly = ppu.ly + 1
-          if new_ly == 144 do
-            req = Interrupts.vblank()
-            req = if elem(@vblank_stat, ppu.lcds), do: Interrupts.stat() ||| req, else: req
-            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-            vblank(ppu)
-            {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
-          else
-            req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-            {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}, req}
-          end
-        :vblank ->
-          new_ly = ppu.ly + 1
-          if new_ly == 153 do
-            req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-            {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
-          else
-            req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat(), else: 0
-            {%{ppu | counter: @vblank_cycles, ly: new_ly}, req}
-          end
-      end
+      req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
+      req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+      {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}, req}
+    end
+  end
+  defp do_cycle(%Ppu{counter: _, mode: :vblank, lcds: lcds, ly: ly, lyc: lyc} = ppu) do
+    new_ly = ly + 1
+    if new_ly == 153 do
+      req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
+      req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+      {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
+    else
+      req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat(), else: 0
+      {%{ppu | counter: @vblank_cycles, ly: new_ly}, req}
     end
   end
 
