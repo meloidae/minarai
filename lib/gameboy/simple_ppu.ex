@@ -198,46 +198,6 @@ defmodule Gameboy.SimplePpu do
     if elem(@display_enable, ppu.lcdc), do: do_cycle(ppu), else: {ppu, 0}
   end
 
-  # defp do_cycle(%Ppu{} = ppu) do
-  #   counter = ppu.counter - 1
-  #   if counter > 0 do
-  #     {Map.put(ppu, :counter, counter), 0}
-  #   else
-  #     case ppu.mode do
-  #       :oam_search ->
-  #         {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
-  #       :pixel_transfer ->
-  #         # Draw line
-  #         pixels = draw_scanline(ppu)
-  #         req = if elem(@hblank_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-  #         {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [ppu.buffer | pixels]}, req}
-  #       :hblank ->
-  #         new_ly = ppu.ly + 1
-  #         if new_ly == 144 do
-  #           req = Interrupts.vblank()
-  #           req = if elem(@vblank_stat, ppu.lcds), do: Interrupts.stat() ||| req, else: req
-  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-  #           vblank(ppu)
-  #           {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
-  #         else
-  #           req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-  #           {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: new_ly}, req}
-  #         end
-  #       :vblank ->
-  #         new_ly = ppu.ly + 1
-  #         if new_ly == 153 do
-  #           req = if elem(@oam_stat, ppu.lcds), do: Interrupts.stat(), else: 0
-  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat() ||| req, else: req
-  #           {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
-  #         else
-  #           req = if elem(@lyc_stat, ppu.lcds) and new_ly === ppu.lyc, do: Interrupts.stat(), else: 0
-  #           {%{ppu | counter: @vblank_cycles, ly: new_ly}, req}
-  #         end
-  #     end
-  #   end
-  # end
-
   defp do_cycle(%Ppu{counter: counter} = ppu) when counter > 1, do: {Map.put(ppu, :counter, counter - 1), 0}
   defp do_cycle(%Ppu{counter: _, mode: :oam_search} = ppu) do
     {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
@@ -399,38 +359,16 @@ defmodule Gameboy.SimplePpu do
   end
 
   def zip_map([], _, acc, _), do: Enum.reverse(acc)
-  def zip_map(_, [], acc, _), do: Enum.reverse(acc)
+  def zip_map([_ | _], [], acc, _), do: Enum.reverse(acc)
   def zip_map([h1 | t1], [h2 | t2], acc, map_fn) do
     zip_map(t1, t2, [map_fn.(h1, h2) | acc], map_fn)
   end
 
-  # def zip_chunk_map(_, _, acc, _), do: Enum.reverse(acc)
-  # def zip_chunk_map([], _, acc, _, _), do: Enum.reverse(acc)
-  # def zip_chunk_map(_, [], acc, _, _), do: Enum.reverse(acc)
-  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7, h8 | t], acc, remainder, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7, h8]) | acc], remainder, map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6, h7 | t], acc, 7, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6, h7]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5, h6 | t], acc, 6, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5, h6]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4, h5 | t], acc, 5, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4, h5]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2, h3, h4 | t], acc, 4, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3, h4]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2, h3 | t], acc, 3, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2, h3]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1, h2 | t], acc, 2, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1, h2]) | acc], map_fn)
-  # end
-  # def zip_chunk_map([hh | tt], [h1 | t], acc, 1, map_fn) do
-  #   zip_chunk_map(tt, t, [map_fn.(hh, [h1]) | acc], map_fn)
-  # end
+  def zip_map_iolist([], _, acc, _), do: acc
+  def zip_map_iolist([_ | _], [], acc, _), do: acc
+  def zip_map_iolist([h1 | t1], [h2 | t2], acc, map_fn) do
+    zip_map_iolist(t1, t2, [acc | map_fn.(h1, h2)], map_fn)
+  end
 
   @x_coords 0..7
   |> Enum.map(fn x ->
@@ -439,6 +377,23 @@ defmodule Gameboy.SimplePpu do
     |> Enum.chunk_every(8)
   end)
   |> List.to_tuple()
+
+  @tile_indexes 0..31
+  |> Enum.map(fn start ->
+    Enum.map(0..19, fn x ->
+      (start + x) &&& 0x1f
+    end)
+  end)
+  |> List.to_tuple()
+
+  @tile_indexes_extra 0..31
+  |> Enum.map(fn start ->
+    Enum.map(0..20, fn x ->
+      (start + x) &&& 0x1f
+    end)
+  end)
+  |> List.to_tuple()
+
 
   defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, bgp: bgp} = ppu) do
     sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
@@ -450,7 +405,7 @@ defmodule Gameboy.SimplePpu do
     row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
     tile_index = div(scx, 8) &&& 0x1f
     scx_offset = rem(scx, 8)
-    num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
+    # num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
     off_color = elem(@off_color, bgp)
     # x coordinates on screen
     # x_coords = -scx_offset..159
@@ -468,11 +423,22 @@ defmodule Gameboy.SimplePpu do
       end
     end
 
-    Memory.read_range(vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
+    tile_row = Memory.read_range(vram, row_addr, 32)
+               |> List.to_tuple()
+
+    # Memory.read_range(vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
     # |> zip_chunk_map(x_coords, [], scx_offset, fn tile_id, xs ->
-    |> zip_map(x_coords, [], fn tile_id, xs ->
-      tile_row_fn.(tile_id)
-      |> zip_map(xs, [], fn p, x ->
+    tile_indexes = if scx_offset === 0 do
+      elem(@tile_indexes, tile_index)
+    else
+      elem(@tile_indexes_extra, tile_index)
+    end
+    tile_indexes
+    # |> zip_map_iolist(x_coords, [], fn tile_id, xs ->
+    |> zip_map_iolist(x_coords, [], fn offset, xs ->
+      # tile_row_fn.(tile_id)
+      tile_row_fn.(elem(tile_row, offset))
+      |> zip_map_iolist(xs, [], fn p, x ->
         cond do
           x < 0 ->
             []
@@ -523,13 +489,6 @@ defmodule Gameboy.SimplePpu do
   defp map_no_reverse([], acc, _), do: acc
   defp map_no_reverse([h | t], acc, map_fn) do
     map_no_reverse(t, [map_fn.(h) | acc], map_fn)
-  end
-
-  defp repeat_tiles(tiles, n) do
-    tiles
-    # |> Enum.map(&(List.duplicate(&1, n)))
-    |> map_no_reverse([], &(List.duplicate(&1, n)))
-    |> List.flatten()
   end
 
   defp vblank(ppu) do
