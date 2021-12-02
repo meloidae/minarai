@@ -1,9 +1,12 @@
 # minarai
 
-WIP: gameboy emulator
+WIP: gameboy emulator written in Elixir
 
-Can get through Bootrom
+## Screenshots
+![screenshot](README/ss_pikachu.png)
 
+At the moment, it reaches the title screen of Pokemon Yellow without crashing.  
+Still has some graphical glitches and the frame rate fluctuates quite a bit (40-80fps).
 
 ## TODO
 - [x] bg rendering
@@ -11,7 +14,6 @@ Can get through Bootrom
 - [ ] window rendering
 - [ ] oam dma transfer
 - [ ] start from commandline (not iex)
-
 
 ## Notes
 Only hram is accessible by cpu during oam dma transfer & hram can't be the source of dma transfer
@@ -36,12 +38,6 @@ Always do wrapping add when adding the scroll value
 - e.g. `(ly + scy) &&& 0xff`
 - Results of blargg's tests wasn't showing up because ly + scy became greater than 0xff
 
-
 ## blargg tests
 - [x] cpu_instrs
 
-## Screenshots
-![screenshot](README/ss_pikachu.png)
-
-At the moment, it reaches the title screen of Pokemon Yellow without crashing.  
-Still has some graphical glitches and the frame rate fluctuates quite a bit (40-80fps).
