@@ -5,6 +5,7 @@ defmodule Gameboy do
   import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   import Gameboy.Cpu.Decode, only: [decode_exec: 2]
   import Gameboy.Cpu.Disassemble, only: [disassemble: 3]
+  alias Gameboy.Joypad
   alias Gameboy.Utils
 
   # defstruct cpu: struct(Cpu), hw: struct(Hardware)
@@ -24,6 +25,10 @@ defmodule Gameboy do
         {cpu, hw}
       :load ->
         load_state()
+      {:key_down, key_name} ->
+        {cpu, Map.put(hw, :joypad, Joypad.keydown(hw.joypad, key_name))}
+      {:key_up, key_name} ->
+        {cpu, Map.put(hw, :joypad, Joypad.keyup(hw.joypad, key_name))}
     after
       0 ->
         {cpu, hw}

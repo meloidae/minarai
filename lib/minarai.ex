@@ -40,6 +40,7 @@ defmodule Minarai do
     :wxWindow.reparent(canvas, frame)
     :wxGLCanvas.setCurrent(canvas, ctx)
     :wxFrame.connect(canvas, :key_down)
+    :wxFrame.connect(canvas, :key_up)
     setup_gl(canvas)
     buffer = generate_binary()
     :gl.enable(:gl_const.gl_texture_2d)
@@ -141,7 +142,7 @@ defmodule Minarai do
   # Start: c key
   # Select: v key
   key_names = [:start, :select, :b, :a, :down, :up, :left, :right]
-  key_codes = [?C, ?V, ?X, ?Z, 40, 38, 37, 39]
+  key_codes = [?C, ?V, ?X, ?Z, 317, 315, 314, 316]
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
       {:wxKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
@@ -160,12 +161,6 @@ defmodule Minarai do
   end
 
   def handle_event({:wx, _, _, _, _} = msg, state) do
-    # cond do
-    #   elem(event, 0) == :wxKey ->
-    #     IO.puts("#{inspect(event)}")
-    #   true ->
-    #     nil
-    # end
     IO.puts("#{inspect(msg)}")
     {:noreply, state}
   end
