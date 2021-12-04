@@ -304,8 +304,6 @@ defmodule Gameboy.SimplePpu do
     sprite_size = elem(@obj_size, lcdc)
     # Memory.read_binary(oam, 0, @oam_size)
     oam_data
-    # |> chunk([])
-    # |> Enum.filter(fn {y, _, _, _} -> ((ly - y + 16) &&& 0xff) < sprite_size end)
     |> chunk_filter([], fn y -> ((ly - y + 16) &&& 0xff) < sprite_size end)
     |> Enum.take(10)
     |> Enum.filter(fn {_, x, _, _} ->
@@ -566,8 +564,6 @@ defmodule Gameboy.SimplePpu do
   end
 
   defp vblank(ppu) do
-    # sprites = Task.await_many(ppu.sprites)
-    # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
     send(Minarai, {:update, data})
   end
