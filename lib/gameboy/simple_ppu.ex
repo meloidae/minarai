@@ -49,7 +49,7 @@ defmodule Gameboy.SimplePpu do
   end)
   |> List.to_tuple()
   @obj_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 1)) != 0 end) |> List.to_tuple()
-  @bg_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
+  @bg_win_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
 
   def init do
     vram = Memory.init(@vram_size)
@@ -394,55 +394,59 @@ defmodule Gameboy.SimplePpu do
 
   @win_tile_indexes 0..20 |> Enum.to_list()
 
-  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
+  defp scanline(%Ppu{vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
     sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
     n_sp = map_size(sprites)
 
-    y = (scy + ly) &&& 0xff
-    bg_tile_line = rem(y, 8) * 2
-    bg_row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
-    bg_tile_index = div(scx, 8) &&& 0x1f
-    scx_offset = rem(scx, 8)
+    if elem(@bg_win_enable, lcdc) do
+      y = (scy + ly) &&& 0xff
+      bg_tile_line = rem(y, 8) * 2
+      bg_row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
+      bg_tile_index = div(scx, 8) &&& 0x1f
+      scx_offset = rem(scx, 8)
 
-    bg_tile_fn = if elem(@tile_data_addr, lcdc) do
-      # 0x8000 address mode
-      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + bg_tile_line, 16)) end
-    else
-      # 0x8800 address mode
-      fn tile_id ->
-        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line, 16))
-      end
-    end
-
-    bg_indexes = if scx_offset === 0 do
-      elem(@tile_indexes, bg_tile_index)
-    else
-      elem(@tile_indexes_extra, bg_tile_index)
-    end
-
-    bg_row = Memory.read_range(vram, bg_row_addr, 32)
-             |> List.to_tuple()
-    
-    if elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166 do
-      win_y = (ly - wy) &&& 0xff
-      win_x = wx - 7
-      win_row_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
-      win_tile_line = rem(win_y, 8) * 2
-      win_row = Memory.read_range(vram, win_row_addr, 32)
-                |> List.to_tuple()
-      win_tile_fn = if elem(@tile_data_addr, lcdc) do
+      bg_tile_fn = if elem(@tile_data_addr, lcdc) do
         # 0x8000 address mode
-        fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + win_tile_line, 16)) end
+        fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + bg_tile_line, 16)) end
       else
         # 0x8800 address mode
         fn tile_id ->
-          elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line, 16))
+          elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line, 16))
         end
       end
-      win_indexes = @win_tile_indexes
-      mix(-scx_offset, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+
+      bg_indexes = if scx_offset === 0 do
+        elem(@tile_indexes, bg_tile_index)
+      else
+        elem(@tile_indexes_extra, bg_tile_index)
+      end
+
+      bg_row = Memory.read_range(vram, bg_row_addr, 32)
+               |> List.to_tuple()
+      
+      if elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166 do
+        win_y = (ly - wy) &&& 0xff
+        win_x = wx - 7
+        win_row_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
+        win_tile_line = rem(win_y, 8) * 2
+        win_row = Memory.read_range(vram, win_row_addr, 32)
+                  |> List.to_tuple()
+        win_tile_fn = if elem(@tile_data_addr, lcdc) do
+          # 0x8000 address mode
+          fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + win_tile_line, 16)) end
+        else
+          # 0x8800 address mode
+          fn tile_id ->
+            elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line, 16))
+          end
+        end
+        win_indexes = @win_tile_indexes
+        mix(-scx_offset, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+      else
+        mix_no_win(-scx_offset, bg_indexes, bg_row, bg_tile_fn, sprites, n_sp, bgp)
+      end
     else
-      mix_no_win(-scx_offset, bg_indexes, bg_row, bg_tile_fn, sprites, n_sp, bgp)
+      mix_no_bg_win(sprites, n_sp)
     end
   end
 
@@ -509,6 +513,27 @@ defmodule Gameboy.SimplePpu do
   defp mix_no_win(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) do
     # Start mixing pixels
     _mix(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, [])
+  end
+
+  # No background or window (sprites only)
+  defp mix_no_bg_win(sprites, n_sp) do
+    # Entry point
+    _mix_no_bg_win(0, sprites, n_sp, elem(@color, 0), [])
+  end
+  defp _mix_no_bg_win(@screen_width, _sprites, _n_sp, _white_color, pixels), do: pixels
+  defp _mix_no_bg_win(x, sprites, 0, white_color, pixels) do
+    # No sprite pixels = just append white_color
+    _mix_no_bg_win(x + 1, sprites, 0, white_color, [pixels | white_color])
+  end
+  defp _mix_no_bg_win(x, sprites, n_sp, white_color, pixels) do
+    # Mix a pixel (white_color or sprite pixel)
+    case sprites do
+      %{^x => {sp, _}} ->
+        pixel = elem(@color, sp)
+        _mix_no_bg_win(x + 1, sprites, n_sp - 1, white_color, [pixels | pixel])
+      _ ->
+        _mix_no_bg_win(x + 1, sprites, n_sp, white_color, [pixels | white_color])
+    end
   end
 
   defp _mix(@screen_width, _bg_tile, _bg_tile_indexes, _bg_tile_row, _bg_tile_fn, _sprites, _n_sp, _bgp, pixels), do: pixels
