@@ -12,7 +12,7 @@ The frame rate fluctuates quite a bit (40-80fps) and has no sound.
 - [x] bg rendering
 - [x] obj rendering
 - [x] window rendering
-- [x] oam dma transfer
+- [ ] oam dma transfer (transfer is instantaneous atm)
 - [x] joypad
 - [ ] commandline options
 - [ ] throttling (if it ever becomes fast enough)
