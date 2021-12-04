@@ -144,7 +144,7 @@ defmodule Minarai do
   key_codes = [?C, ?V, ?X, ?Z, 40, 38, 37, 39]
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
-      {:wkKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+      {:wxKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
     }, %{pid: pid} = state) do
       send(pid, {:key_down, unquote(name)})
       {:noreply, state}
@@ -152,7 +152,7 @@ defmodule Minarai do
   end
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
-      {:wkKey, :key_up, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+      {:wxKey, :key_up, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
     }, %{pid: pid} = state) do
       send(pid, {:key_up, unquote(name)})
       {:noreply, state}
