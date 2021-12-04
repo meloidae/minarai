@@ -1,6 +1,7 @@
 defmodule Gameboy.Joypad do
   use Bitwise
   alias Gameboy.Joypad
+  alias Gameboy.Interrupts
 
   # Use an 8-bit register to store states of 8 keys
   @start 0b1000_0000
@@ -44,18 +45,18 @@ defmodule Gameboy.Joypad do
       def keydown({reg, keys} = _joypad, unquote(name)) do
         keys = keys &&& unquote(reset)
         if elem(@selected_layout, reg) === :button do
-          {(reg &&& 0b0011_0000) ||| (keys >>> 4), keys}
+          {{(reg &&& 0b0011_0000) ||| (keys >>> 4), keys}, Interrupts.joypad()}
         else
-          {reg, keys}
+          {{reg, keys}, Interrupts.joypad()}
         end
       end
     else
       def keydown({reg, keys} = _joypad, unquote(name)) do
         keys = keys &&& unquote(reset)
         if elem(@selected_layout, reg) === :direction do
-          {(reg &&& 0b0011_0000) ||| (keys &&& 0x0f), keys}
+          {{(reg &&& 0b0011_0000) ||| (keys &&& 0x0f), keys}, Interrupts.joypad()}
         else
-          {reg, keys}
+          {{reg, keys}, Interrupts.joypad()}
         end
       end
     end
