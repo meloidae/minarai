@@ -15,6 +15,7 @@ The frame rate fluctuates quite a bit (40-80fps) and has no sound.
 - [x] oam dma transfer
 - [x] joypad
 - [ ] commandline options
+- [ ] throttling (if it ever becomes fast enough)
 - [ ] sound (if possible)
 
 ## Notes
