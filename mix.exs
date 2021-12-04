@@ -25,7 +25,7 @@ defmodule Minarai.MixProject do
       # {:scenic, "~> 0.10"},
       # {:scenic_driver_glfw, "~> 0.10", targets: :host},
       # {:scenic_driver_glfw, path: "../scenic_driver_glfw", targets: :host},
-      {:minarai_nif, path: "../minarai_nif"},
+      # {:minarai_nif, path: "../minarai_nif"},
     ]
   end
 end
