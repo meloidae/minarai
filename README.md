@@ -11,9 +11,9 @@ Still has some graphical glitches and the frame rate fluctuates quite a bit (40-
 ## TODO
 - [x] bg rendering
 - [x] obj rendering
-- [ ] window rendering
-- [ ] oam dma transfer
-- [ ] start from commandline (not iex)
+- [x] window rendering
+- [x] oam dma transfer
+- [ ] joypad
 
 ## Notes
 Only hram is accessible by cpu during oam dma transfer & hram can't be the source of dma transfer
