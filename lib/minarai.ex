@@ -82,13 +82,6 @@ defmodule Minarai do
     {:stop, :normal, state}
   end
 
-  # def handle_info(:update, state) do
-  #   state = Map.put(state, :buffer, modify_binary(state.buffer))
-  #   :wx.batch(fn -> render(state) end)
-  #   state = %{state | count: state.count + 1}
-  #   {:noreply, state}
-  # end
-
   def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time} = state) do
     curr_time = System.monotonic_time()
     fps = if !is_nil(prev_time) do
@@ -104,9 +97,6 @@ defmodule Minarai do
     {:noreply, state}
   end
 
-
-  # Example input:
-  # {:wx, -2006, {:wx_ref, 35, :wxFrame, []}, [], {:wxClose, :close_window}}
   def handle_event({:wx, _, _, _, {:wxClose, :close_window}}, state) do
     {:stop, :normal, state}
   end
@@ -145,6 +135,30 @@ defmodule Minarai do
     {:noreply, state}
   end
 
+  # Game controls
+  # A: z key
+  # B: x key
+  # Start: c key
+  # Select: v key
+  key_names = [:start, :select, :b, :a, :down, :up, :left, :right]
+  key_codes = [?C, ?V, ?X, ?Z, 40, 38, 37, 39]
+  for {name, code} <- Enum.zip([key_names, key_codes]) do
+    def handle_event({:wx, _, _, _,
+      {:wkKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+    }, %{pid: pid} = state) do
+      send(pid, {:key_down, unquote(name)})
+      {:noreply, state}
+    end
+  end
+  for {name, code} <- Enum.zip([key_names, key_codes]) do
+    def handle_event({:wx, _, _, _,
+      {:wkKey, :key_up, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+    }, %{pid: pid} = state) do
+      send(pid, {:key_up, unquote(name)})
+      {:noreply, state}
+    end
+  end
+
   def handle_event({:wx, _, _, _, _} = msg, state) do
     # cond do
     #   elem(event, 0) == :wxKey ->
@@ -164,22 +178,12 @@ defmodule Minarai do
   end
 
 
-  #####################
-  # Private Functions #
-  #####################
-  
   defp generate_binary() do
     1..@width * @height
     |> Enum.reduce(<<>>, fn _, acc ->
       acc <> <<155, 188, 15>>
     end)
   end
-
-  # defp modify_binary(bin) do
-  #   index = (:rand.uniform(@width * @height) - 1) * 3
-  #   <<first::binary-size(index), _::binary-size(3), rest::binary>> = bin
-  #   first <> <<0, 0, 0>> <> rest
-  # end
 
   defp load_texture(buffer) do
     # Generate texture id
@@ -268,7 +272,7 @@ defmodule Minarai do
     :gl.loadIdentity()
     :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
     :gl.scalef(@scale / 0.5, @scale / 0.5, 0.0)
-    :gl.'begin'(:gl_const.gl_triangle_strip)
+    :gl.begin(:gl_const.gl_triangle_strip)
     :gl.texCoord2f(0.0, 0.0)
     :gl.vertex2i(x, y)
     :gl.texCoord2f(1.0, 0.0)
@@ -277,7 +281,7 @@ defmodule Minarai do
     :gl.vertex2i(x, y + div(h, 2))
     :gl.texCoord2f(1.0, 1.0)
     :gl.vertex2i(x + div(w, 2), y + div(h, 2))
-    :gl.'end'()
+    :gl.end()
     :ok
   end
 
