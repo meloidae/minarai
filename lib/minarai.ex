@@ -46,6 +46,8 @@ defmodule Minarai do
     :gl.enable(:gl_const.gl_texture_2d)
     texture = load_texture(buffer)
 
+    keys = %{start: false, select: false, b: false, a: false, down: false, up: false, left: false, right: false}
+
     state = %{
       frame: frame,
       canvas: canvas,
@@ -53,9 +55,9 @@ defmodule Minarai do
       texture: texture,
       buffer: buffer,
       pid: Process.spawn(fn -> Gameboy.start(opts) end, [:link]),
-      count: 0.0,
       prev_time: nil,
       fps: nil,
+      keys: keys,
     }
 
     {frame, state}
@@ -146,17 +148,22 @@ defmodule Minarai do
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
       {:wxKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-    }, %{pid: pid} = state) do
-      send(pid, {:key_down, unquote(name)})
-      {:noreply, state}
+    }, %{pid: pid, keys: %{unquote(name) => pressed} = keys} = state) do
+      if !pressed do
+        send(pid, {:key_down, unquote(name)})
+        Map.put(keys, unquote(name), true)
+      else
+        keys
+      end
+      {:noreply, %{state | keys: keys}}
     end
   end
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
       {:wxKey, :key_up, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-    }, %{pid: pid} = state) do
+    }, %{pid: pid, keys: keys} = state) do
       send(pid, {:key_up, unquote(name)})
-      {:noreply, state}
+      {:noreply, %{state | keys: Map.put(keys, unquote(name), false)}}
     end
   end
 
