@@ -25,7 +25,7 @@ defmodule Gameboy.Hardware do
             intr: nil,
             dma: nil,
             serial: struct(Serial),
-            joypad: struct(Joypad),
+            joypad: nil,
             counter: 0
 
   @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
@@ -57,6 +57,7 @@ defmodule Gameboy.Hardware do
     timer = Timer.init()
     intr = Interrupts.init()
     dma = Dma.init()
+    joypad = Joypad.init()
     %Hardware{
       bootrom: bootrom,
       cart: cart,
@@ -66,7 +67,8 @@ defmodule Gameboy.Hardware do
       apu: apu,
       timer: timer,
       intr: intr,
-      dma: dma
+      dma: dma,
+      joypad: joypad
     }
   end
 
