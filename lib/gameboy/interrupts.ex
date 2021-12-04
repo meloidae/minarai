@@ -52,7 +52,7 @@ defmodule Gameboy.Interrupts do
     elem(@intr_table, (enable <<< 5) ||| flag)
   end
 
-  def request(intr, 0), do: intr
+  def request({_, _} = intr, 0), do: intr
   def request({enable, flag} = _intr, req) do
     {enable, flag ||| req}
   end

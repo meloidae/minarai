@@ -110,18 +110,16 @@ defmodule Gameboy.Cartridge do
     TupleMemory.read(rom, addr)
   end
 
-  def read_rom_high(%{mbc: mbc, rom: rom} = cart, addr) do
-    case mbc do
-      %{type: :nombc} -> # No Mbc, so just read from specified address
-        TupleMemory.read(rom, addr)
-      %{type: :mbc1, rom: {_low_offset, high_offset}} ->
-        TupleMemory.read(rom, high_offset ||| (addr &&& @bank_mask))
-      %{type: :mbc3, rom: offset} ->
-        TupleMemory.read(rom, offset ||| (addr &&& @bank_mask))
-      _ ->
-        raise "Read rom high for mbc #{inspect(mbc)} is unimplemented"
-    end
+  def read_rom_high(%{mbc: %{type: :nombc}, rom: rom}, addr) do
+    TupleMemory.read(rom, addr)
   end
+  def read_rom_high(%{mbc: %{type: :mbc1, rom: {_low_offset, high_offset}}, rom: rom}, addr) do
+    TupleMemory.read(rom, high_offset ||| (addr &&& @bank_mask))
+  end
+  def read_rom_high(%{mbc: %{type: :mbc3, rom: offset}, rom: rom}, addr) do
+    TupleMemory.read(rom, offset ||| (addr &&& @bank_mask))
+  end
+
 
   def read_binary_rom_low(%{mbc: mbc, rom: rom, ram: ram} = cart, addr, len) do
     case mbc do

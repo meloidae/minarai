@@ -123,28 +123,27 @@ defmodule Gameboy.Timer do
     end
   end
 
-  def cycle(timer) do
-    if timer.overflow do
-      # Request interrupt
-      # Timer interrupt and load from tma is delayed 1 cycle from an actual overflow
-      {%{timer | counter: (timer.counter + 1) &&& 0xffff, tima: timer.tima, overflow: false}, Interrupts.timer()}
-    else
-      if elem(@timer_enable, timer.tac) and check_counter_bit(timer.counter, timer.tac) do
-        new_counter = (timer.counter + 1) &&& 0xffff
-        # Detected a fallen edge on a counter bit = increment, ex. 0x0111 -> 0x1000
-        if !check_counter_bit(new_counter, timer.tac) do
-          new_tima = timer.tima + 1
-          if new_tima > 0xff do # tima overflow
-            {%{timer | counter: new_counter, tima: 0, overflow: true}, 0}
-          else
-            {%{timer | counter: new_counter, tima: new_tima}, 0}
-          end
+  def cycle(%{overflow: true, tma: tma, counter: counter} = timer) do
+    # Request interrupt
+    # Timer interrupt and load from tma is delayed 1 cycle from an actual overflow
+    {%{timer | counter: (counter + 1) &&& 0xffff, tima: tma, overflow: false}, Interrupts.timer()}
+  end
+  def cycle(%{overflow: _, counter: counter, tima: tima, tac: tac} = timer) do
+    if elem(@timer_enable, tac) and check_counter_bit(counter, tac) do
+      new_counter = (counter + 1) &&& 0xffff
+      # Detected a fallen edge on a counter bit = increment, ex. 0x0111 -> 0x1000
+      if !check_counter_bit(new_counter, tac) do
+        new_tima = tima + 1
+        if new_tima > 0xff do # tima overflow
+          {%{timer | counter: new_counter, tima: 0, overflow: true}, 0}
         else
-          {%{timer | counter: (timer.counter + 1) &&& 0xffff}, 0}
+          {%{timer | counter: new_counter, tima: new_tima}, 0}
         end
       else
-        {%{timer | counter: (timer.counter + 1) &&& 0xffff}, 0}
+        {%{timer | counter: new_counter}, 0}
       end
+    else
+      {%{timer | counter: (counter + 1) &&& 0xffff}, 0}
     end
   end
 

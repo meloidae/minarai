@@ -445,22 +445,27 @@ defmodule Gameboy.Hardware do
     %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}
   end
 
-  def cycle(hw) do
+  # DMA is requested
+  def cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
     # oam
-    {ppu, dma} = if hw.dma.requested do
-      dma = Dma.acknowledge_request(hw.dma)
-      addr = Dma.address(dma)
-      data = dma_read(hw, addr, elem(@high_addr, addr))
-      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
-    else
-      {hw.ppu, hw.dma}
-    end
+    dma = Dma.acknowledge_request(dma)
+    addr = Dma.address(dma)
+    data = dma_read(hw, addr, elem(@high_addr, addr))
+    ppu = Ppu.oam_dma_transfer(ppu, data, 0xa0)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    {timer, timer_req} = Timer.cycle(hw.timer)
-    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
-    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}
+    {timer, timer_req} = Timer.cycle(timer)
+    intr = Interrupts.request(intr, ppu_req ||| timer_req)
+    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 4}
   end
-
+  # No DMA
+  def cycle(%{ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
+    # ppu
+    {ppu, ppu_req} = Ppu.cycle(ppu)
+    # timer
+    {timer, timer_req} = Timer.cycle(timer)
+    intr = Interrupts.request(intr, ppu_req ||| timer_req)
+    %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 4}
+  end
 end

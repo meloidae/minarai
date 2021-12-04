@@ -29,17 +29,17 @@ defmodule Gameboy do
         {cpu, hw}
     end
     # Handle interrupts
-    {cpu, hw} = handle_interrupt(cpu, hw)
-    case cpu.state do
+    {%{pc: pc, state: state} = cpu, hw} = handle_interrupt(cpu, hw)
+    case state do
       :running ->
-        {cpu, hw} = fetch_next(cpu, hw, cpu.pc)
+        {cpu, hw} = fetch_next(cpu, hw, pc)
         # {cpu, hw} = decode_exec(cpu, hw)
         decode_exec(cpu, hw)
         # %{gb | cpu: cpu, hw: hw}
       :haltbug ->
         # Halt bug. Fetch but don't increment pc
         # IO.puts("Resolving halt bug")
-        pc = cpu.pc
+        # pc = pc
         {cpu, hw} = fetch_next(cpu, hw, pc)
         cpu = %{cpu | pc: pc, state: :running}
         # {cpu, hw} = decode_exec(cpu, hw)

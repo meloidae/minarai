@@ -345,8 +345,6 @@ defmodule Gameboy.SimplePpu do
 
   defp draw_scanline(ppu) do
     scanline(ppu)
-    # scanline_flat(ppu)
-    # scanline_task(ppu.oam.data, ppu.vram.data, ppu.lcdc, ppu.ly, ppu.scy, ppu.scx, ppu.bgp, ppu.obp0, ppu.obp1)
     # MinaraiNif.scanline(ppu.vram.data,
     #   ppu.oam.data,
     #   ppu.lcdc,
@@ -394,107 +392,158 @@ defmodule Gameboy.SimplePpu do
   end)
   |> List.to_tuple()
 
+  @win_tile_indexes 0..20 |> Enum.to_list()
 
-  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, bgp: bgp} = ppu) do
+  defp scanline(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
     sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
-    sp_pixel_count = map_size(sprites)
+    n_sp = map_size(sprites)
 
     y = (scy + ly) &&& 0xff
-    # Render background
-    tile_line = rem(y, 8) * 2
-    row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
-    tile_index = div(scx, 8) &&& 0x1f
-    scx_offset = rem(scx, 8)
-    # num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
-    off_color = elem(@off_color, bgp)
-    # x coordinates on screen
-    # x_coords = -scx_offset..159
-    #            |> Enum.to_list()
-         # |> Enum.chunk_every(8)
-    x_coords = elem(@x_coords, scx_offset)
-
-    tile_row_fn = if elem(@tile_data_addr, lcdc) do
-      # 0x8000 address mode
-      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + tile_line, 16)) end
-    else
-      # 0x8800 address mode
-      fn tile_id ->
-        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
-      end
-    end
-
-    tile_row = Memory.read_range(vram, row_addr, 32)
-               |> List.to_tuple()
-
-    # Memory.read_range(vram, (row_addr + tile_index) &&& @vram_mask, num_tiles)
-    # |> zip_chunk_map(x_coords, [], scx_offset, fn tile_id, xs ->
-    tile_indexes = if scx_offset === 0 do
-      elem(@tile_indexes, tile_index)
-    else
-      elem(@tile_indexes_extra, tile_index)
-    end
-    tile_indexes
-    # |> zip_map_iolist(x_coords, [], fn tile_id, xs ->
-    |> zip_map_iolist(x_coords, [], fn offset, xs ->
-      # tile_row_fn.(tile_id)
-      tile_row_fn.(elem(tile_row, offset))
-      |> zip_map_iolist(xs, [], fn p, x ->
-        cond do
-          x < 0 ->
-            []
-          sp_pixel_count === 0 ->
-            bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-            elem(@color, bg_pixel)
-          true ->
-            case sprites do
-              %{^x => {sp, true}} ->
-                bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-                if bg_pixel === off_color, do: elem(@color, sp), else: elem(@color, bg_pixel)
-              %{^x => {sp, _}} ->
-                elem(@color, sp)
-              _ ->
-                bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-                elem(@color, bg_pixel)
-            end
-        end
-      end)
-    end)
-  end
-
-  defp mix_pixels(%Ppu{vram: vram, lcdc: lcdc, lcds: lcds, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
-    y = (scy + ly) &&& 0xff
-    tile_line = rem(y, 8) * 2
+    bg_tile_line = rem(y, 8) * 2
     bg_row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
     bg_tile_index = div(scx, 8) &&& 0x1f
     scx_offset = rem(scx, 8)
-    bg_num_tiles = if scx_offset == 0, do: @tiles_per_row, else: @tiles_per_row + 1
-    off_color = elem(@off_color, bgp)
 
-    bg_tile_row_fn = if elem(@tile_data_addr, lcdc) do
+    bg_tile_fn = if elem(@tile_data_addr, lcdc) do
       # 0x8000 address mode
-      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + tile_line, 16)) end
+      fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + bg_tile_line, 16)) end
     else
       # 0x8800 address mode
       fn tile_id ->
-        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + tile_line, 16))
+        elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line, 16))
       end
     end
+
+    bg_indexes = if scx_offset === 0 do
+      elem(@tile_indexes, bg_tile_index)
+    else
+      elem(@tile_indexes_extra, bg_tile_index)
+    end
+
+    bg_row = Memory.read_range(vram, bg_row_addr, 32)
+             |> List.to_tuple()
     
-    win_y = ly - wy
-    win_x = (wx - 7) &&& 0xff
-    win_tile_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
-    win_tile_index = div(scx, 8) &&& 0x1f
+    if elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166 do
+      win_y = (ly - wy) &&& 0xff
+      win_x = wx - 7
+      win_row_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
+      win_tile_line = rem(win_y, 8) * 2
+      win_row = Memory.read_range(vram, win_row_addr, 32)
+                |> List.to_tuple()
+      win_tile_fn = if elem(@tile_data_addr, lcdc) do
+        # 0x8000 address mode
+        fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + win_tile_line, 16)) end
+      else
+        # 0x8800 address mode
+        fn tile_id ->
+          elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line, 16))
+        end
+      end
+      win_indexes = @win_tile_indexes
+      mix(-scx_offset, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+    else
+      mix_no_win(-scx_offset, bg_indexes, bg_row, bg_tile_fn, sprites, n_sp, bgp)
+    end
   end
 
-  defp map_no_reverse([], acc, _), do: acc
-  defp map_no_reverse([h | t], acc, map_fn) do
-    map_no_reverse(t, [map_fn.(h) | acc], map_fn)
+
+  @screen_width 160
+  defp mix(x, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) do
+    # Entry point
+    [h_bg | rest_bg] = bg_indexes
+    mix_pre_win(x, win_x, bg_tile_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+  end
+
+  defp mix_pre_win(x, win_x, [_p | rest], bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) when x < 0 do
+    # Throw away pixels while x < 0
+    mix_pre_win(x + 1, win_x, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+  end
+  defp mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) do
+    # Start mixing pixels
+    _mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, [])
+  end
+
+  defp _mix_pre_win(x, win_x, _bg_tile, _bg_indexes, _bg_row, _bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) when win_x <= 0 do
+    # Start rendering windows
+    [h_win | rest_win] = win_indexes
+    win_tile = win_tile_fn.(elem(win_row, h_win)) 
+    if win_x === 0, do: win_tile, else: Enum.drop(win_tile, -win_x)
+    _mix(x, win_tile, rest_win, win_row, win_tile_fn, sprites, n_sp, bgp, pixels)
+  end
+  defp _mix_pre_win(x, win_x, [] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) do
+    # Get a new tile when bg_tile is empty
+    [h_bg | rest_bg] = bg_indexes
+    _mix_pre_win(x, win_x, bg_tile_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels)
+  end
+  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, 0, bgp, pixels) do
+    # No sprite pixels
+    pixel = elem(@color, (bgp >>> (p * 2)) &&& 0x3)
+    _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, 0, bgp, [pixels | pixel])
+  end
+  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) do
+    # Mix a background and sprite pixel
+    case sprites do
+      %{^x => {sp, true}} ->
+        bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+        pixel = if bg_pixel === elem(@off_color, bgp), do: elem(@color, sp), else: elem(@color, bg_pixel)
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+      %{^x => {sp, _}} ->
+        pixel = elem(@color, sp)
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+      _ ->
+        bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+        pixel = elem(@color, bg_pixel)
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, [pixels | pixel])
+    end
+  end
+
+  defp mix_no_win(x, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) do
+    # Entry point
+    [h | rest] = bg_tile_indexes
+    mix_no_win(x, bg_tile_fn.(elem(bg_tile_row, h)), rest, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp)
+  end
+  defp mix_no_win(x, [_p | rest], bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) when x < 0 do
+    # Throw away pixels while x < 0
+    mix_no_win(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp)
+  end
+  defp mix_no_win(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) do
+    # Start mixing pixels
+    _mix(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, [])
+  end
+
+  defp _mix(@screen_width, _bg_tile, _bg_tile_indexes, _bg_tile_row, _bg_tile_fn, _sprites, _n_sp, _bgp, pixels), do: pixels
+  defp _mix(x, [] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels) do
+    # Get a new tile when bg_tile is empty
+    [h | rest] = bg_tile_indexes
+    _mix(x, bg_tile_fn.(elem(bg_tile_row, h)), rest, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels)
+  end
+  defp _mix(x, [p | rest] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, 0, bgp, pixels) do
+    # No sprite pixels
+    bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+    pixel = elem(@color, bg_pixel)
+    _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, 0, bgp, [pixels | pixel])
+  end
+  defp _mix(x, [p | rest] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels) do
+    # Mix a pixel
+    case sprites do
+      %{^x => {sp, true}} ->
+        bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+        pixel = if bg_pixel === elem(@off_color, bgp), do: elem(@color, sp), else: elem(@color, bg_pixel)
+        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+      %{^x => {sp, _}} ->
+        pixel = elem(@color, sp)
+        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+      _ ->
+        bg_pixel = (bgp >>> (p * 2)) &&& 0x3
+        pixel = elem(@color, bg_pixel)
+        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, [pixels | pixel])
+    end
   end
 
   defp vblank(ppu) do
     # sprites = Task.await_many(ppu.sprites)
     # data = Task.await_many(ppu.buffer) |> IO.iodata_to_binary()
     data = ppu.buffer |> IO.iodata_to_binary()
-    # send(Minarai, {:update, data})
+    send(Minarai, {:update, data})
   end
 end

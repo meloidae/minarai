@@ -60,9 +60,9 @@ defmodule Gameboy.Cpu do
             # Acknowledge interrupt
             intr = Interrupts.acknowledge(hw.intr, mask)
             # Change pc to address specified by interrupt and switch to running state
-            if cpu.state != :running do
+            # if cpu.state != :running do
               # IO.puts("Resume with jump")
-            end
+            # end
             {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, Map.put(hw, :intr, intr)}
           cpu.state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
