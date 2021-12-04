@@ -5,15 +5,17 @@ WIP: gameboy emulator written in Elixir
 ## Screenshots
 ![screenshot](README/ss_pikachu.png)
 
-At the moment, it reaches the title screen of Pokemon Yellow without crashing.  
-Still has some graphical glitches and the frame rate fluctuates quite a bit (40-80fps).
+At the moment, Pokemon Yellow seems to be playable.  
+The frame rate fluctuates quite a bit (40-80fps) and has no sound.  
 
 ## TODO
 - [x] bg rendering
 - [x] obj rendering
 - [x] window rendering
 - [x] oam dma transfer
-- [ ] joypad
+- [x] joypad
+- [ ] commandline options
+- [ ] sound (if possible)
 
 ## Notes
 Only hram is accessible by cpu during oam dma transfer & hram can't be the source of dma transfer  
