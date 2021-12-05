@@ -21,11 +21,11 @@ defmodule Gameboy do
   # def step(%{cpu: cpu, hw: hw} = gb) do
   def step({cpu, hw} = _gb) do
     {cpu, hw} = receive do
-      :save ->
-        save_state({cpu, hw})
+      {:save, path} ->
+        save_state({cpu, hw}, path)
         {cpu, hw}
-      :load ->
-        load_state()
+      {:load, path} ->
+        load_state(path)
       {:key_down, key_name} ->
         %{joypad: joypad, intr: intr} = hw
         {joypad, req} = Joypad.keydown(joypad, key_name)
@@ -95,12 +95,12 @@ defmodule Gameboy do
     debug_step(Gameboy.step(gb))
   end
 
-  def save_state(gb, path \\ "state.gb") do
+  def save_state(gb, path \\ "state.save") do
     IO.puts("Saving the game state to #{path}")
     File.write!(path, :erlang.term_to_binary(gb), [:write])
   end
 
-  def load_state(path \\ "state.gb") do
+  def load_state(path \\ "state.save") do
     state = path 
             |> File.read!()
             |> :erlang.binary_to_term()

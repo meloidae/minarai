@@ -7,12 +7,13 @@ defmodule Minarai do
   @height 144
   @scale 4
   @size {@width * @scale, @height * @scale}
+  @save_path "state.save"
 
   #######
   # API #
   #######
   def start_link(opts \\ []) do
-    window = :wx_object.start_link(__MODULE__, [], [])
+    window = :wx_object.start_link(__MODULE__, opts, [])
     pid = :wx_object.get_pid(window)
     Process.register(pid, __MODULE__)
   end
@@ -21,19 +22,25 @@ defmodule Minarai do
   # :wx_object behavior callbacks #
   #################################
   def init(opts) do
-    wx = :wx.new(opts)
+    save_path = case Access.fetch(opts, :save_path) do
+      {:ok, path} ->
+        path
+      _ ->
+        @save_path
+    end
+
+    wx = :wx.new([])
     frame = :wxFrame.new(wx, :wx_const.wx_id_any, @title, [{:size, @size}])
     :wxWindow.connect(frame, :close_window)
     :wxFrame.show(frame)
 
-    opts = [{:size, @size}]
     gl_attrib = [{:attribList, [:wx_const.wx_gl_rgba,
                                 :wx_const.wx_gl_doublebuffer,
                                 :wx_const.wx_gl_min_red, 8,
                                 :wx_const.wx_gl_min_green, 8,
                                 :wx_const.wx_gl_min_blue, 8,
                                 :wx_const.wx_gl_depth_size, 24, 0]}]
-    canvas = :wxGLCanvas.new(frame, opts ++ gl_attrib)
+    canvas = :wxGLCanvas.new(frame, [size: @size] ++ gl_attrib)
     ctx = :wxGLContext.new(canvas)
 
     :wxGLCanvas.connect(canvas, :size)
@@ -56,8 +63,9 @@ defmodule Minarai do
       buffer: buffer,
       pid: Process.spawn(fn -> Gameboy.start(opts) end, [:link]),
       prev_time: nil,
-      fps: nil,
+      fps: [],
       keys: keys,
+      save_path: save_path,
     }
 
     {frame, state}
@@ -85,17 +93,17 @@ defmodule Minarai do
     {:stop, :normal, state}
   end
 
-  def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time} = state) do
+  def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time, fps: fps_stats} = state) do
     curr_time = System.monotonic_time()
     fps = if !is_nil(prev_time) do
       diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
       fps = 1_000_000 / diff
-      :wxTopLevelWindow.setTitle(frame, "#{@title} (FPS: #{Float.round(fps, 2)})")
+      :wxTopLevelWindow.setTitle(frame, "#{@title} [FPS: #{Float.round(fps, 2)}]")
       fps
     else
-      nil
+      []
     end
-    state = %{state | buffer: buffer, prev_time: curr_time, fps: fps}
+    state = %{state | buffer: buffer, prev_time: curr_time, fps: [fps | fps_stats]}
     :wx.batch(fn -> render(state) end)
     {:noreply, state}
   end
@@ -120,21 +128,21 @@ defmodule Minarai do
     {:noreply, state}
   end
 
+  # Save state
   @s_key 83
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, @s_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, state) do
-    pid = state.pid
-    send(pid, :save)
+  }, %{pid: pid, save_path: path} = state) do
+    send(pid, {:save, path})
     {:noreply, state}
   end
 
+  # Load state
   @l_key 76
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, @l_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, state) do
-    pid = state.pid
-    send(pid, :load)
+  }, %{pid: pid, save_path: path} = state) do
+    send(pid, {:load, path})
     {:noreply, state}
   end
 
