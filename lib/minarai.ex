@@ -95,15 +95,15 @@ defmodule Minarai do
 
   def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time, fps: fps_stats} = state) do
     curr_time = System.monotonic_time()
-    fps = if !is_nil(prev_time) do
+    fps_stats = if !is_nil(prev_time) do
       diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
       fps = 1_000_000 / diff
       :wxTopLevelWindow.setTitle(frame, "#{@title} [FPS: #{Float.round(fps, 2)}]")
-      fps
+      [fps | fps_stats]
     else
       []
     end
-    state = %{state | buffer: buffer, prev_time: curr_time, fps: [fps | fps_stats]}
+    state = %{state | buffer: buffer, prev_time: curr_time, fps: fps_stats}
     :wx.batch(fn -> render(state) end)
     {:noreply, state}
   end
@@ -128,22 +128,39 @@ defmodule Minarai do
     {:noreply, state}
   end
 
-  # Save state
-  @s_key 83
+  # Save state: s key
   def handle_event({:wx, _, _, _,
-    {:wxKey, :key_down, _x, _y, @s_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+    {:wxKey, :key_down, _x, _y, ?S, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
   }, %{pid: pid, save_path: path} = state) do
     send(pid, {:save, path})
     {:noreply, state}
   end
 
-  # Load state
-  @l_key 76
+  # Load state: l key
   def handle_event({:wx, _, _, _,
-    {:wxKey, :key_down, _x, _y, @l_key, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+    {:wxKey, :key_down, _x, _y, ?L, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
   }, %{pid: pid, save_path: path} = state) do
     send(pid, {:load, path})
     {:noreply, state}
+  end
+
+  # Log fps stats
+  def handle_event({:wx, _, _, _,
+    {:wxKey, :key_down, _x, _y, ?F, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
+  }, %{fps: fps_stats} = state) do
+    # Log fps stats to file
+    fps_output = fps_stats
+             |> Enum.reverse()
+             |> Stream.with_index()
+             |> Enum.map(fn {fps, i} -> "#{i + 1},#{fps}\n" end)
+             |> IO.iodata_to_binary()
+    File.open("log/fps.csv", [:write], fn file ->
+      IO.write(file, "frame,fps\n")
+      IO.write(file, fps_output)
+    end)
+    IO.puts("Wrote fps stats to: log/fps.csv")
+    # Clear fps stats
+    {:noreply, %{state | fps: []}}
   end
 
   # Game controls
