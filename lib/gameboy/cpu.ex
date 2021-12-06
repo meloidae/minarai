@@ -80,41 +80,41 @@ defmodule Gameboy.Cpu do
   def read_register(%Cpu{b: b, c: c}, :bc), do: (b <<< 8) ||| c
   def read_register(%Cpu{d: d, e: e}, :de), do: (d <<< 8) ||| e
   def read_register(%Cpu{h: h, l: l}, :hl), do: (h <<< 8) ||| l
-  def read_register(cpu, :pc), do: cpu.pc
-  def read_register(cpu, :sp), do: cpu.sp
+  def read_register(%Cpu{pc: pc}, :pc), do: pc
+  def read_register(%Cpu{sp: sp}, :sp), do: sp
 
 
   # 8 bit reads from a register
-  def read_register(cpu, :a), do: cpu.a
-  def read_register(cpu, :f), do: cpu.f
-  def read_register(cpu, :b), do: cpu.b
-  def read_register(cpu, :c), do: cpu.c
-  def read_register(cpu, :d), do: cpu.d
-  def read_register(cpu, :e), do: cpu.e
-  def read_register(cpu, :h), do: cpu.h
-  def read_register(cpu, :l), do: cpu.l
+  def read_register(%Cpu{a: a}, :a), do: a
+  def read_register(%Cpu{f: f}, :f), do: f
+  def read_register(%Cpu{b: b}, :b), do: b
+  def read_register(%Cpu{c: c}, :c), do: c
+  def read_register(%Cpu{d: d}, :d), do: d
+  def read_register(%Cpu{e: e}, :e), do: e
+  def read_register(%Cpu{h: h}, :h), do: h
+  def read_register(%Cpu{l: l}, :l), do: l
 
 
   # 16-bit writes to a register
-  def write_register(cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xf0}  # lower nibble of f is always zero
-  def write_register(cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
-  def write_register(cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
-  def write_register(cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
-  def write_register(cpu, :pc, data), do: Map.put(cpu, :pc, data)
-  def write_register(cpu, :sp, data), do: Map.put(cpu, :sp, data)
+  def write_register(%Cpu{} = cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xf0}  # lower nibble of f is always zero
+  def write_register(%Cpu{} = cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
+  def write_register(%Cpu{} = cpu, :pc, data), do: Map.put(cpu, :pc, data)
+  def write_register(%Cpu{} = cpu, :sp, data), do: Map.put(cpu, :sp, data)
   # def write_register(cpu, :pc, data), do: %{cpu | pc: data}
   # def write_register(cpu, :sp, data), do: %{cpu | sp: data}
 
 
   # 8-bit writes to a register
-  def write_register(cpu, :a, data), do: Map.put(cpu, :a, data)
-  def write_register(cpu, :f, data), do: Map.put(cpu, :f, data &&& 0xf0)  # Lower nibble is always zero
-  def write_register(cpu, :b, data), do: Map.put(cpu, :b, data)
-  def write_register(cpu, :c, data), do: Map.put(cpu, :c, data)
-  def write_register(cpu, :d, data), do: Map.put(cpu, :d, data)
-  def write_register(cpu, :e, data), do: Map.put(cpu, :e, data)
-  def write_register(cpu, :h, data), do: Map.put(cpu, :h, data)
-  def write_register(cpu, :l, data), do: Map.put(cpu, :l, data)
+  def write_register(%Cpu{} = cpu, :a, data), do: Map.put(cpu, :a, data)
+  def write_register(%Cpu{} = cpu, :f, data), do: Map.put(cpu, :f, data &&& 0xf0)  # Lower nibble is always zero
+  def write_register(%Cpu{} = cpu, :b, data), do: Map.put(cpu, :b, data)
+  def write_register(%Cpu{} = cpu, :c, data), do: Map.put(cpu, :c, data)
+  def write_register(%Cpu{} = cpu, :d, data), do: Map.put(cpu, :d, data)
+  def write_register(%Cpu{} = cpu, :e, data), do: Map.put(cpu, :e, data)
+  def write_register(%Cpu{} = cpu, :h, data), do: Map.put(cpu, :h, data)
+  def write_register(%Cpu{} = cpu, :l, data), do: Map.put(cpu, :l, data)
 
   # Set/Get flags
   for {which_flag, offset} <- Enum.zip([:z, :n, :h, :c], 7..4) do
