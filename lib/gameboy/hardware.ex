@@ -1,7 +1,6 @@
 defmodule Gameboy.Hardware do
   use Bitwise
   alias Gameboy.Hardware
-  alias Gameboy.Memory
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
   alias Gameboy.SimplePpu, as: Ppu
@@ -68,49 +67,55 @@ defmodule Gameboy.Hardware do
       timer: timer,
       intr: intr,
       dma: dma,
-      joypad: joypad
+      joypad: joypad,
     }
   end
 
   defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
     memory_cycle(hw, fn hw -> {Bootrom.read(bootrom, addr), hw} end)
+    # hw = cycle(hw)
+    # {Bootrom.read(bootrom, addr), hw}
   end
   for high <- 0..0xff do
     cond do
       high <= 0x3f ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
+          # hw = cycle(hw)
+          # {Cartridge.read_rom_low(hw.cart, addr), hw}
         end
       high <= 0x7f ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
+          # hw = cycle(hw)
+          # {Cartridge.read_rom_high(hw.cart, addr), hw}
         end
       high <= 0x9f ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
         end
       high <= 0xbf ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Cartridge.read_ram(hw.cart, addr), hw} end)
         end
       high <= 0xcf ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
         end
       high <= 0xdf ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
         end
       high <= 0xef ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
         end
       high <= 0xfd ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
         end
       high == 0xfe ->
-        defp _read(hw, addr, unquote(high)) do
+        defp _read(%Hardware{} = hw, addr, unquote(high)) do
           low = addr &&& 0xff
           if low <= 0x9f do
             # oam
@@ -121,7 +126,7 @@ defmodule Gameboy.Hardware do
           end
         end
       true -> 
-        defp _read(hw, addr, _) do
+        defp _read(%Hardware{} = hw, addr, _) do
           read_ff(hw, addr)
         end
     end
@@ -411,40 +416,72 @@ defmodule Gameboy.Hardware do
     memory_fn.(hw)
   end
 
-  defp timer_read_cycle(hw, timer_fn) do
+  # DMA is requested
+  defp timer_read_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
     # oam
-    {ppu, dma} = if hw.dma.requested do
-      dma = Dma.acknowledge_request(hw.dma)
-      addr = Dma.address(dma)
-      data = dma_read(hw, addr, elem(@high_addr, addr))
-      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
-    else
-      {hw.ppu, hw.dma}
-    end
+    dma = Dma.acknowledge_request(dma)
+    addr = Dma.address(dma)
+    data = dma_read(hw, addr, elem(@high_addr, addr))
+    ppu = Ppu.oam_dma_transfer(ppu, data, 0xa0)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    {value, timer, timer_req} = timer_fn.(hw.timer)
-    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
-    {value, %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}}
+    {value, timer, timer_req} = timer_fn.(timer)
+    req = ppu_req ||| timer_req
+    if req != 0 do
+      intr = Interrupts.request(intr, req)
+      {value, %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}}
+    else
+      {value, %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}}
+    end
+  end
+  # No DMA
+  defp timer_read_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
+    # ppu
+    {ppu, ppu_req} = Ppu.cycle(ppu)
+    # timer
+    {value, timer, timer_req} = timer_fn.(timer)
+    req = ppu_req ||| timer_req
+    if req != 0 do
+      intr = Interrupts.request(intr, req)
+      {value, %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}}
+    else
+      {value, %{hw | ppu: ppu, timer: timer, counter: counter + 1}}
+    end
   end
 
-  defp timer_write_cycle(hw, timer_fn) do
+  # DMA is requested
+  defp timer_write_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
     # oam
-    {ppu, dma} = if hw.dma.requested do
-      dma = Dma.acknowledge_request(hw.dma)
-      addr = Dma.address(dma)
-      data = dma_read(hw, addr, elem(@high_addr, addr))
-      {Ppu.oam_dma_transfer(hw.ppu, data, 0xa0), dma}
-    else
-      {hw.ppu, hw.dma}
-    end
+    dma = Dma.acknowledge_request(dma)
+    addr = Dma.address(dma)
+    data = dma_read(hw, addr, elem(@high_addr, addr))
+    ppu = Ppu.oam_dma_transfer(ppu, data, 0xa0)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
-    {timer, timer_req} = timer_fn.(hw.timer)
-    intr = Interrupts.request(hw.intr, ppu_req ||| timer_req)
-    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: hw.counter + 4}
+    {timer, timer_req} = timer_fn.(timer)
+    req = ppu_req ||| timer_req
+    if req !== 0 do
+      intr = Interrupts.request(intr, req)
+      %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}
+    else
+      %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}
+    end
+  end
+  # No DMA
+  defp timer_write_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
+    # ppu
+    {ppu, ppu_req} = Ppu.cycle(ppu)
+    # timer
+    {timer, timer_req} = timer_fn.(timer)
+    req = ppu_req ||| timer_req
+    if req !== 0 do
+      intr = Interrupts.request(intr, req)
+      %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}
+    else
+      %{hw | ppu: ppu, timer: timer, counter: counter + 1}
+    end
   end
 
   # DMA is requested
@@ -459,25 +496,25 @@ defmodule Gameboy.Hardware do
     # timer
     {timer, timer_req} = Timer.cycle(timer)
     req = ppu_req ||| timer_req
-    if req != 0 do
-      intr = Interrupts.request(intr, ppu_req ||| timer_req)
-      %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 4}
+    if req !== 0 do
+      intr = Interrupts.request(intr, req)
+      %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}
     else
-      %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 4}
+      %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}
     end
   end
   # No DMA
-  def cycle(%{ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
+  def cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
     {timer, timer_req} = Timer.cycle(timer)
     req = ppu_req ||| timer_req
-    if req != 0 do
-      intr = Interrupts.request(intr, ppu_req ||| timer_req)
-      %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 4}
+    if req !== 0 do
+      intr = Interrupts.request(intr, req)
+      %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}
     else
-      %{hw | ppu: ppu, timer: timer, counter: counter + 4}
+      %{hw | ppu: ppu, timer: timer, counter: counter + 1}
     end
   end
 end

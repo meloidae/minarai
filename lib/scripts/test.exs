@@ -10,4 +10,4 @@ end
             |> :erlang.binary_to_term()
 gb = {cpu, Map.put(hw, :counter, 0)}
 
-Gameboy.Test.run_loop(gb, 70224 * 60)
+Gameboy.Test.run_loop(gb, 17556 * 60)

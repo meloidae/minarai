@@ -54,7 +54,8 @@ defmodule Gameboy.SimplePpu do
   def init do
     vram = Memory.init(@vram_size)
     oam = Memory.init(@oam_size)
-    %Ppu{vram: vram, oam: oam, counter: 0}
+    # %Ppu{vram: vram, oam: oam, counter: 0}
+    %Ppu{vram: vram, oam: oam}
   end
 
   def read_oam(%Ppu{mode: mode, oam: oam} = _ppu, addr) do
@@ -92,13 +93,11 @@ defmodule Gameboy.SimplePpu do
     Memory.read_binary(vram, addr &&& @vram_mask, len)
   end
 
-  defp read_range_vram(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr &&& @vram_mask, len)
-
-  defp read_int_vram(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr &&& @vram_mask, size)
-
-  defp read_vram_no_mask(%Ppu{vram: vram} = _ppu, addr), do: Memory.read(vram, addr)
-  defp read_range_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr, len)
-  defp read_int_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr, size)
+  # defp read_range_vram(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr &&& @vram_mask, len)
+  # defp read_int_vram(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr &&& @vram_mask, size)
+  # defp read_vram_no_mask(%Ppu{vram: vram} = _ppu, addr), do: Memory.read(vram, addr)
+  # defp read_range_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, len), do: Memory.read_range(vram, addr, len)
+  # defp read_int_vram_no_mask(%Ppu{vram: vram} = _ppu, addr, size), do: Memory.read_int(vram, addr, size)
 
   def write_vram(%Ppu{mode: mode, vram: vram} = ppu, addr, value) do
     if mode == :pixel_transfer do
@@ -233,6 +232,40 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
+  # def update(%Ppu{mode: :oam_search} = ppu) do
+  #   {Map.put(ppu, :mode, :pixel_transfer), 0, @pixel_transfer_cycles}
+  # end
+  # def update(%Ppu{mode: :pixel_transfer, lcds: lcds, buffer: buffer} = ppu) do
+  #   pixels = draw_scanline(ppu)
+  #   req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
+  #   {%{ppu | mode: :hblank, buffer: [buffer | pixels]}, req, @hblank_cycles}
+  # end
+  # def update(%Ppu{mode: :hblank, lcds: lcds, ly: ly, lyc: lyc} = ppu) do
+  #   new_ly = ly + 1
+  #   if new_ly == 144 do
+  #     req = Interrupts.vblank()
+  #     req = if elem(@vblank_stat, lcds), do: Interrupts.stat() ||| req, else: req
+  #     req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+  #     vblank(ppu)
+  #     {%{ppu | mode: :vblank, ly: new_ly}, req, @vblank_cycles}
+  #   else
+  #     req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
+  #     req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+  #     {%{ppu | mode: :oam_search, ly: new_ly}, req, @oam_search_cycles}
+  #   end
+  # end
+  # def update(%Ppu{mode: :vblank, lcds: lcds, ly: ly, lyc: lyc} = ppu) do
+  #   new_ly = ly + 1
+  #   if new_ly == 153 do
+  #     req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
+  #     req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+  #     {%{ppu | mode: :oam_search, ly: 0, buffer: []}, req, @oam_search_cycles}
+  #   else
+  #     req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat(), else: 0
+  #     {Map.put(ppu, :ly, new_ly), req, @vblank_cycles}
+  #   end
+  # end
+
   @tile_bytes 0..0xffff
   |> Enum.map(fn x ->
     <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
@@ -288,17 +321,17 @@ defmodule Gameboy.SimplePpu do
     reduce_with_index(t, index + 1, reduce_fn.(h, index, acc), reduce_fn)
   end
 
-  defp chunk(<<>>, acc), do: Enum.reverse(acc)
-  defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
+  # defp chunk(<<>>, acc), do: Enum.reverse(acc)
+  # defp chunk(<<y, x, t, f, rest::binary>>, acc), do: chunk(rest, [{y, x, t, f} | acc])
 
-  defp chunk_filter(<<>>, acc, _filter_fn), do: Enum.reverse(acc)
-  defp chunk_filter(<<y, x, t, f, rest::binary>>, acc, filter_fn) do
-    if filter_fn.(y) do
-      chunk_filter(rest, [{y, x, t, f} | acc], filter_fn)
-    else
-      chunk_filter(rest, acc, filter_fn)
-    end
-  end
+  # defp chunk_filter(<<>>, acc, _filter_fn), do: Enum.reverse(acc)
+  # defp chunk_filter(<<y, x, t, f, rest::binary>>, acc, filter_fn) do
+  #   if filter_fn.(y) do
+  #     chunk_filter(rest, [{y, x, t, f} | acc], filter_fn)
+  #   else
+  #     chunk_filter(rest, acc, filter_fn)
+  #   end
+  # end
 
   defp filter_oam_y(oam_data, ly, sprite_size), do: filter_oam_y(oam_data, ly, sprite_size, 0, [])
   defp filter_oam_y(<<>>, _ly, _sprite_size, _count, acc), do: Enum.reverse(acc)
@@ -378,13 +411,13 @@ defmodule Gameboy.SimplePpu do
     zip_map_iolist(t1, t2, [acc | map_fn.(h1, h2)], map_fn)
   end
 
-  @x_coords 0..7
-  |> Enum.map(fn x ->
-    start = -x
-    start..159
-    |> Enum.chunk_every(8)
-  end)
-  |> List.to_tuple()
+  # @x_coords 0..7
+  # |> Enum.map(fn x ->
+  #   start = -x
+  #   start..159
+  #   |> Enum.chunk_every(8)
+  # end)
+  # |> List.to_tuple()
 
   @tile_indexes 0..31
   |> Enum.map(fn start ->

@@ -1,7 +1,8 @@
 defmodule Gameboy.Test.Frame do
   alias Mix.Tasks.Profile.Fprof
-  # def run_frame(gb) when gb.hw.counter >= 70224, do: gb
-  def run_frame({_, %{counter: counter}} = gb) when counter >= 70224, do: gb
+
+  @counter_frame div(70224, 4)
+  def run_frame({_, %{counter: counter}} = gb) when counter >= @counter_frame, do: gb
   def run_frame(gb), do: run_frame(Gameboy.step(gb))
   def run_frames_fps(gb, 0, fps_info), do: {gb, fps_info}
   def run_frames_fps(gb, 4 = n, fps_info) do
