@@ -41,10 +41,7 @@ defmodule Gameboy.Cpu.Execute do
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
     {value, carry, half_carry} = Cpu.add_u16_byte_carry(sp, offset)
     cpu = Cpu.write_register(cpu, :hl, value)
-          |> Cpu.set_flag(:z, false)
-          |> Cpu.set_flag(:n, false)
-          |> Cpu.set_flag(:h, half_carry)
-          |> Cpu.set_flag(:c, carry)
+          |> Cpu.set_all_flags(false, false, half_carry, carry)
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
   end
 
@@ -78,10 +75,7 @@ defmodule Gameboy.Cpu.Execute do
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {sum, carry, half_carry} = add_fn.(val1, val2, cpu)
     {cpu, hw} = Cpu.write(cpu, dst, hw, sum)
-    cpu = Cpu.set_flag(cpu, :z, sum == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, half_carry)
-    |> Cpu.set_flag(:c, carry)
+    cpu = Cpu.set_all_flags(cpu, sum == 0, false, half_carry, carry)
     {cpu, hw}
   end
   # ADD dd, ss
@@ -96,10 +90,7 @@ defmodule Gameboy.Cpu.Execute do
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = sub_fn.(val1, val2, cpu)
     {cpu, hw} = Cpu.write(cpu, dst, hw, diff)
-    cpu = Cpu.set_flag(cpu, :z, diff == 0)
-    |> Cpu.set_flag(:n, true)
-    |> Cpu.set_flag(:h, half_carry)
-    |> Cpu.set_flag(:c, carry)
+    cpu = Cpu.set_all_flags(cpu, diff == 0, true, half_carry, carry)
     {cpu, hw}
   end
   # SUB dd, ss
@@ -112,10 +103,7 @@ defmodule Gameboy.Cpu.Execute do
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = val1 &&& val2
     {cpu, hw} = Cpu.write(cpu, dst, hw, result)
-    cpu = Cpu.set_flag(cpu, :z, result == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, true)
-    |> Cpu.set_flag(:c, false)
+    cpu = Cpu.set_all_flags(cpu, result == 0, false, true, false)
     {cpu, hw}
   end
 
@@ -125,10 +113,7 @@ defmodule Gameboy.Cpu.Execute do
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = val1 ||| val2
     {cpu, hw} = Cpu.write(cpu, dst, hw, result)
-    cpu = Cpu.set_flag(cpu, :z, result == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
-    |> Cpu.set_flag(:c, false)
+    cpu = Cpu.set_all_flags(cpu, result == 0, false, false, false)
     {cpu, hw}
   end
 
@@ -138,10 +123,7 @@ defmodule Gameboy.Cpu.Execute do
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = bxor(val1, val2)
     {cpu, hw} = Cpu.write(cpu, dst, hw, result)
-    cpu = Cpu.set_flag(cpu, :z, result == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
-    |> Cpu.set_flag(:c, false)
+    cpu = Cpu.set_all_flags(cpu, result == 0, false, false, false)
     {cpu, hw}
   end
 
@@ -150,7 +132,6 @@ defmodule Gameboy.Cpu.Execute do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = Cpu.sub_u8_byte_carry(val1, val2)
-    # cpu = Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}, {:c, carry}])
     cpu = Cpu.set_all_flags(cpu, diff == 0, true, half_carry, carry)
     {cpu, hw}
   end
@@ -159,11 +140,7 @@ defmodule Gameboy.Cpu.Execute do
   def inc(%Cpu{} = cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {sum, _carry, half_carry} = Cpu.add_u8_byte_carry(value, 1)
-    # Cpu.set_flag(cpu, :z, sum == 0)
-    # |> Cpu.set_flag(:n, false)
-    # |> Cpu.set_flag(:h, half_carry)
-    # |> Cpu.write(dst, hw, sum)
-    Cpu.set_flags(cpu, [{:z, sum == 0}, {:n, false}, {:h, half_carry}])
+    Cpu.set_flags(cpu, [z: sum == 0, n: false, h: half_carry])
     |> Cpu.write(dst, hw, sum)
   end
 
@@ -171,10 +148,7 @@ defmodule Gameboy.Cpu.Execute do
   def dec(%Cpu{} = cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {diff, _carry, half_carry} = Cpu.sub_u8_byte_carry(value, 1)
-    # Cpu.set_flag(cpu, :z, diff == 0)
-    # |> Cpu.set_flag(:n, true)
-    # |> Cpu.set_flag(:h, half_carry)
-    Cpu.set_flags(cpu, [{:z, diff == 0}, {:n, true}, {:h, half_carry}])
+    Cpu.set_flags(cpu, [z: diff == 0, n: true, h: half_carry])
     |> Cpu.write(dst, hw, diff)
   end
 
@@ -188,12 +162,8 @@ defmodule Gameboy.Cpu.Execute do
     hl = Cpu.read_register(cpu, :hl)
     val = Cpu.read_register(cpu, reg16)
     {sum, carry, half_carry} = Cpu.add_u16_word_carry(hl, val)
-    # cpu = Cpu.write_register(cpu, :hl, sum)
-    #       |> Cpu.set_flag(:n, false)
-    #       |> Cpu.set_flag(:h, half_carry)
-    #       |> Cpu.set_flag(:c, carry)
     cpu = Cpu.write_register(cpu, :hl, sum)
-          |> Cpu.set_flags([{:n, false}, {:h, half_carry}, {:c, carry}])
+          |> Cpu.set_flags([n: false, h: half_carry, c: carry])
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
   end
 
@@ -236,10 +206,7 @@ defmodule Gameboy.Cpu.Execute do
   def swap(%Cpu{} = cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = ((value &&& 0x0f) <<< 4) ||| ((value &&& 0xf0) >>> 4)
-    Cpu.set_flag(cpu, :z, value == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
-    |> Cpu.set_flag(:c, false)
+    Cpu.set_all_flags(cpu, value == 0, false, false, false)
     |> Cpu.write(dst, hw, value)
   end
 
@@ -279,8 +246,7 @@ defmodule Gameboy.Cpu.Execute do
   def cpl(%Cpu{} = cpu, hw) do
     a = cpu.a
     cpu = Map.put(cpu, :a, ~~~a &&& 0xff)
-    |> Cpu.set_flag(:n, true)
-    |> Cpu.set_flag(:h, true)
+          |> Cpu.set_flags([n: true, h: true])
     {cpu, hw}
   end
 
@@ -289,9 +255,7 @@ defmodule Gameboy.Cpu.Execute do
   # Complement a carry flag
   def ccf(%Cpu{} = cpu, hw) do
     carry = Cpu.flag(cpu, :c)
-    cpu = Cpu.set_flag(cpu, :c, !carry)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
+    cpu = Cpu.set_flags(cpu, [c: !carry, n: false, h: false])
     {cpu, hw}
   end
 
@@ -299,9 +263,7 @@ defmodule Gameboy.Cpu.Execute do
   # 4 cycles
   # Set a carry flag
   def scf(%Cpu{} = cpu, hw) do
-    cpu = Cpu.set_flag(cpu, :c, true)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, false)
+    cpu = Cpu.set_flags(cpu, [c: true, n: false, h: false])
     {cpu, hw}
   end
 
@@ -414,9 +376,7 @@ defmodule Gameboy.Cpu.Execute do
   def bit(%Cpu{} = cpu, hw, bit, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = value &&& (0x1 <<< bit)
-    cpu = Cpu.set_flag(cpu, :z, value == 0)
-    |> Cpu.set_flag(:n, false)
-    |> Cpu.set_flag(:h, true)
+    cpu = Cpu.set_flags(cpu, [z: value == 0, n: false, h: true])
     {cpu, hw}
   end
   # SET b, dd
