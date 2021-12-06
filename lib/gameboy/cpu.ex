@@ -343,12 +343,11 @@ defmodule Gameboy.Cpu do
   def srl_u8_byte_carry(value, _cpu), do: srl_u8_byte_carry(value)
 
   # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
-  def fetch_imm8(cpu, hw) do
-    addr = cpu.pc
+  def fetch_imm8(%Cpu{pc: addr} = cpu, hw) do
     {value, hw} = Hardware.synced_read(hw, addr)
     # {value, write_register(cpu, :pc, (addr + 1) &&& 0xffff), hw}
     # {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
-    {value, %{cpu | pc: (addr + 1) &&& 0xffff}, hw}
+    {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
   end
 
   # Fetch 16 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented

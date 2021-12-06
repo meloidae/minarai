@@ -145,8 +145,9 @@ defmodule Gameboy.Hardware do
   for low <- 0..0xff do
     case low do
       0x00 -> 
-        defp _read_ff(hw, addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Joypad.get(hw.joypad), hw} end)
+        defp _read_ff(hw, _addr, unquote(low)) do
+          hw = cycle(hw)
+          {Joypad.get(hw.joypad), hw}
         end
       0x01 ->
         defp _read_ff(_hw, addr, unquote(low)) do
@@ -174,31 +175,38 @@ defmodule Gameboy.Hardware do
         end
       0x0f ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Interrupts.interrupt_flag(hw.intr), hw} end)
+          hw = cycle(hw)
+          {Interrupts.interrupt_flag(hw.intr), hw}
         end
       0x40 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.lcd_control(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.lcd_control(hw.ppu), hw}
         end
       0x41 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.lcd_status(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.lcd_status(hw.ppu), hw}
         end
       0x42 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.scroll_y(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.scroll_y(hw.ppu), hw}
         end
       0x43 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.scroll_x(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.scroll_x(hw.ppu), hw}
         end
       0x44 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.line_y(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.line_y(hw.ppu), hw}
         end
       0x45 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.line_y_compare(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.line_y_compare(hw.ppu), hw}
         end
       0x46 ->
         defp _read_ff(_hw, addr, unquote(low)) do
@@ -206,39 +214,48 @@ defmodule Gameboy.Hardware do
         end
       0x47 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.bg_palette(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.bg_palette(hw.ppu), hw}
         end
       0x48 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.ob_palette0(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.ob_palette0(hw.ppu), hw}
         end
       0x49 ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.ob_palette1(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.ob_palette1(hw.ppu), hw}
         end
       0x4a ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.window_y(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.window_y(hw.ppu), hw}
         end
       0x4b ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Ppu.window_x(hw.ppu), hw} end)
+          hw = cycle(hw)
+          {Ppu.window_x(hw.ppu), hw}
         end
       0xff ->
         defp _read_ff(hw, _addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Interrupts.interrupt_enable(hw.intr), hw} end)
+          hw = cycle(hw)
+          {Interrupts.interrupt_enable(hw.intr), hw}
         end
       x when 0x80 <= x and x <= 0xfe ->
         defp _read_ff(hw, addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Hram.read(hw.hram, addr), hw} end)
+          hw = cycle(hw)
+          {Hram.read(hw.hram, addr), hw}
         end
       x when 0x10 <= x and x <= 0x26 ->
         defp _read_ff(hw, addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
+          hw = cycle(hw)
+          {Apu.read(hw.apu, addr), hw}
         end
       x when 0x30 <= x and x <= 0x3f ->
         defp _read_ff(hw, addr, unquote(low)) do
-          memory_cycle(hw, fn hw -> {Apu.read(hw.apu, addr), hw} end)
+          hw = cycle(hw)
+          {Apu.read(hw.apu, addr), hw}
         end
       _ ->
         defp _read_ff(hw, addr, unquote(low)) do
