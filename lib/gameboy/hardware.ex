@@ -72,54 +72,58 @@ defmodule Gameboy.Hardware do
   end
 
   defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
-    memory_cycle(hw, fn hw -> {Bootrom.read(bootrom, addr), hw} end)
-    # hw = cycle(hw)
-    # {Bootrom.read(bootrom, addr), hw}
+    hw = cycle(hw)
+    {Bootrom.read(bootrom, addr), hw}
   end
   for high <- 0..0xff do
     cond do
       high <= 0x3f ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Cartridge.read_rom_low(hw.cart, addr), hw} end)
-          # hw = cycle(hw)
-          # {Cartridge.read_rom_low(hw.cart, addr), hw}
+          hw = cycle(hw)
+          {Cartridge.read_rom_low(hw.cart, addr), hw}
         end
       high <= 0x7f ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Cartridge.read_rom_high(hw.cart, addr), hw} end)
-          # hw = cycle(hw)
-          # {Cartridge.read_rom_high(hw.cart, addr), hw}
+          hw = cycle(hw)
+          {Cartridge.read_rom_high(hw.cart, addr), hw}
         end
       high <= 0x9f ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Ppu.read_vram(hw.ppu, addr), hw} end)
+          hw = cycle(hw)
+          {Ppu.read_vram(hw.ppu, addr), hw}
         end
       high <= 0xbf ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Cartridge.read_ram(hw.cart, addr), hw} end)
+          hw = cycle(hw)
+          {Cartridge.read_ram(hw.cart, addr), hw}
         end
       high <= 0xcf ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+          hw = cycle(hw)
+          {Wram.read_low(hw.wram, addr), hw}
         end
       high <= 0xdf ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+          hw = cycle(hw)
+          {Wram.read_high(hw.wram, addr), hw}
         end
       high <= 0xef ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Wram.read_low(hw.wram, addr), hw} end)
+          hw = cycle(hw)
+          {Wram.read_low(hw.wram, addr), hw}
         end
       high <= 0xfd ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
-          memory_cycle(hw, fn hw -> {Wram.read_high(hw.wram, addr), hw} end)
+          hw = cycle(hw)
+          {Wram.read_high(hw.wram, addr), hw}
         end
       high == 0xfe ->
         defp _read(%Hardware{} = hw, addr, unquote(high)) do
           low = addr &&& 0xff
           if low <= 0x9f do
             # oam
-            memory_cycle(hw, fn hw -> {Ppu.read_oam(hw.ppu, low), hw} end)
+            hw = cycle(hw)
+            {Ppu.read_oam(hw.ppu, low), hw}
           else
             # unusable memory
             raise "Read from unusable memory at #{Utils.to_hex(addr)}"
