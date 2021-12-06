@@ -7,7 +7,7 @@ defmodule Gameboy.SimplePpu do
   @vram_size 0x4000
   @oam_size 0xa0
   @vram_mask 0x1fff
-  @byte_mask 0xff
+  # @byte_mask 0xff
 
   @oam_search_cycles 20
   @pixel_transfer_cycles 43
@@ -202,7 +202,7 @@ defmodule Gameboy.SimplePpu do
     {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
   end
   defp do_cycle(%Ppu{counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer} = ppu) do
-    pixels = draw_scanline(ppu)
+    pixels = scanline(ppu)
     req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
     {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [buffer | pixels]}, req}
   end
@@ -288,7 +288,7 @@ defmodule Gameboy.SimplePpu do
   end)
   |> List.to_tuple()
 
-  @tiles_per_row 20
+  # @tiles_per_row 20
   # @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
   @color {<<0xe0, 0xf0, 0xe7>>, <<0x8b, 0xa3, 0x94>>, <<0x55, 0x64, 0x5a>>, <<0x34, 0x3d, 0x37>>}
   @tile_id_8800 0..0xff
@@ -334,13 +334,23 @@ defmodule Gameboy.SimplePpu do
   # end
 
   defp filter_oam_y(oam_data, ly, sprite_size), do: filter_oam_y(oam_data, ly, sprite_size, 0, [])
-  defp filter_oam_y(<<>>, _ly, _sprite_size, _count, acc), do: Enum.reverse(acc)
-  defp filter_oam_y(<<_, _, _, _, _::binary>>, _ly, _sprite_size, 10, acc), do: Enum.reverse(acc)
+  defp filter_oam_y(<<>>, _ly, _sprite_size, _count, acc), do: acc
+  defp filter_oam_y(<<_, _, _, _, _::binary>>, _ly, _sprite_size, 10, acc), do: acc
   defp filter_oam_y(<<y, x, t, f, rest::binary>>, ly, sprite_size, count, acc) do
     if ((ly - y + 16) &&& 0xff) < sprite_size do
       filter_oam_y(rest, ly, sprite_size, count + 1, [{y, x, t, f} | acc])
     else
       filter_oam_y(rest, ly, sprite_size, count, acc)
+    end
+  end
+
+  defp filter_oam_x(oam_list), do: filter_oam_x(oam_list, 0, [])
+  defp filter_oam_x([], _count, acc), do: acc
+  defp filter_oam_x([{_, x, _, _} = sprite | rest], count, acc) do
+    if x > 0 and x < 168 do
+      filter_oam_x(rest, count + 1, [{sprite, count} | acc])
+    else
+      filter_oam_x(rest, count, acc)
     end
   end
 
@@ -351,10 +361,11 @@ defmodule Gameboy.SimplePpu do
     # |> chunk_filter([], fn y -> ((ly - y + 16) &&& 0xff) < sprite_size end)
     # |> Enum.take(10)
     |> filter_oam_y(ly, sprite_size)
-    |> Enum.filter(fn {_, x, _, _} ->
-      x > 0 and x < 168
-    end)
-    |> Enum.with_index()
+    |> filter_oam_x()
+    # |> Enum.filter(fn {_, x, _, _} ->
+    #   x > 0 and x < 168
+    # end)
+    # |> Enum.with_index()
     |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
       (x0 < x1) or (x0 === x1 and i0 > i1)
     end)
@@ -386,8 +397,8 @@ defmodule Gameboy.SimplePpu do
     end)
   end
 
-  defp draw_scanline(ppu) do
-    scanline(ppu)
+  # defp draw_scanline(ppu) do
+    # scanline(ppu)
     # MinaraiNif.scanline(ppu.vram.data,
     #   ppu.oam.data,
     #   ppu.lcdc,
@@ -397,7 +408,7 @@ defmodule Gameboy.SimplePpu do
     #   ppu.bgp,
     #   ppu.obp0,
     #   ppu.obp1)
-  end
+  # end
 
   def zip_map([], _, acc, _), do: Enum.reverse(acc)
   def zip_map([_ | _], [], acc, _), do: Enum.reverse(acc)

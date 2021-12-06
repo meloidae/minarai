@@ -360,10 +360,9 @@ defmodule Gameboy.Cpu do
   end
 
   # Push 16 bit to value to stack
-  def push_u16(cpu, hw, data) do
+  def push_u16(%Cpu{sp: sp} = cpu, hw, data) do
     low = data &&& 0xff
     high = (data >>> 8) &&& 0xff
-    sp = cpu.sp
     sp = (sp - 1) &&& 0xffff
     # IO.puts("high sp = #{Utils.to_hex(sp)}")
     hw = Hardware.synced_write(hw, sp, high)
@@ -374,8 +373,7 @@ defmodule Gameboy.Cpu do
   end
 
   # Pop 16 bit value from stack
-  def pop_u16(cpu, hw) do
-    sp = cpu.sp
+  def pop_u16(%Cpu{sp: sp} = cpu, hw) do
     {low, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
     {high, hw} = Hardware.synced_read(hw, sp)
