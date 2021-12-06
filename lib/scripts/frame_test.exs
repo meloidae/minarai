@@ -1,19 +1,19 @@
 defmodule Gameboy.Test.Frame do
-  # alias Mix.Tasks.Profile.Fprof
+  alias Mix.Tasks.Profile.Fprof
   # def run_frame(gb) when gb.hw.counter >= 70224, do: gb
   def run_frame({_, %{counter: counter}} = gb) when counter >= 70224, do: gb
   def run_frame(gb), do: run_frame(Gameboy.step(gb))
   def run_frames_fps(gb, 0, fps_info), do: {gb, fps_info}
-  # def run_frames_fps(gb, 6 = n, fps_info) do
-  #   start_time = System.monotonic_time()
-  #   Fprof.profile(fn -> run_frame(gb) end, [:callers, :details])
-  #   gb = run_frame(gb)
-  #   end_time = System.monotonic_time()
-  #   {cpu, hw} = gb
-  #   gb = {cpu, Map.put(hw, :counter, 0)}
-  #   fps = 1_000 / System.convert_time_unit(end_time - start_time, :native, :millisecond)
-  #   run_frames_fps(gb, n - 1, [fps | fps_info])
-  # end
+  def run_frames_fps(gb, 4 = n, fps_info) do
+    start_time = System.monotonic_time()
+    Fprof.profile(fn -> run_frame(gb) end, [:callers, :details])
+    gb = run_frame(gb)
+    end_time = System.monotonic_time()
+    {cpu, hw} = gb
+    gb = {cpu, Map.put(hw, :counter, 0)}
+    fps = 1_000 / System.convert_time_unit(end_time - start_time, :native, :millisecond)
+    run_frames_fps(gb, n - 1, [fps | fps_info])
+  end
   def run_frames_fps(gb, n, fps_info) do
     start_time = System.monotonic_time()
     gb = run_frame(gb)

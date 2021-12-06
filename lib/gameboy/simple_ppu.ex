@@ -300,12 +300,24 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
-  defp get_sprite_map(%Ppu{oam: %{data: oam_data}, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = ppu) do
+  defp filter_oam_y(oam_data, ly, sprite_size), do: filter_oam_y(oam_data, ly, sprite_size, 0, [])
+  defp filter_oam_y(<<>>, _ly, _sprite_size, _count, acc), do: Enum.reverse(acc)
+  defp filter_oam_y(<<_, _, _, _, _::binary>>, _ly, _sprite_size, 10, acc), do: Enum.reverse(acc)
+  defp filter_oam_y(<<y, x, t, f, rest::binary>>, ly, sprite_size, count, acc) do
+    if ((ly - y + 16) &&& 0xff) < sprite_size do
+      filter_oam_y(rest, ly, sprite_size, count + 1, [{y, x, t, f} | acc])
+    else
+      filter_oam_y(rest, ly, sprite_size, count, acc)
+    end
+  end
+
+  defp get_sprite_map(%Ppu{oam: %{data: oam_data}, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
     sprite_size = elem(@obj_size, lcdc)
     # Memory.read_binary(oam, 0, @oam_size)
     oam_data
-    |> chunk_filter([], fn y -> ((ly - y + 16) &&& 0xff) < sprite_size end)
-    |> Enum.take(10)
+    # |> chunk_filter([], fn y -> ((ly - y + 16) &&& 0xff) < sprite_size end)
+    # |> Enum.take(10)
+    |> filter_oam_y(ly, sprite_size)
     |> Enum.filter(fn {_, x, _, _} ->
       x > 0 and x < 168
     end)

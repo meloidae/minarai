@@ -458,8 +458,13 @@ defmodule Gameboy.Hardware do
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
     {timer, timer_req} = Timer.cycle(timer)
-    intr = Interrupts.request(intr, ppu_req ||| timer_req)
-    %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 4}
+    req = ppu_req ||| timer_req
+    if req != 0 do
+      intr = Interrupts.request(intr, ppu_req ||| timer_req)
+      %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 4}
+    else
+      %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 4}
+    end
   end
   # No DMA
   def cycle(%{ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
@@ -467,7 +472,12 @@ defmodule Gameboy.Hardware do
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
     {timer, timer_req} = Timer.cycle(timer)
-    intr = Interrupts.request(intr, ppu_req ||| timer_req)
-    %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 4}
+    req = ppu_req ||| timer_req
+    if req != 0 do
+      intr = Interrupts.request(intr, ppu_req ||| timer_req)
+      %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 4}
+    else
+      %{hw | ppu: ppu, timer: timer, counter: counter + 4}
+    end
   end
 end
