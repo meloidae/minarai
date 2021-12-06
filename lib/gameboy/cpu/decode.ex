@@ -3,14 +3,12 @@ defmodule Gameboy.Cpu.Decode do
   alias Gameboy.Cpu.Execute, as: Exec
   alias Gameboy.Utils
 
-  def decode_exec(cpu, hw) do
-    case cpu.delayed_set_ime do
+  def decode_exec(%{opcode: opcode, delayed_set_ime: delayed_set_ime} = cpu, hw) do
+    case delayed_set_ime do
       nil ->
-        # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
-        instruction(cpu.opcode, cpu, hw)
+        instruction(opcode, cpu, hw)
       value ->
-        # if cpu.opcode != 0xcb, do: IO.puts("#{Utils.to_hex(cpu.opcode, 2)}")
-        {cpu, hw} = instruction(cpu.opcode, cpu, hw)
+        {cpu, hw} = instruction(opcode, cpu, hw)
         {%{cpu | ime: value, delayed_set_ime: nil}, hw}
     end
   end
