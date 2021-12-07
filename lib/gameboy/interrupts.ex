@@ -4,14 +4,16 @@ defmodule Gameboy.Interrupts do
   alias Gameboy.Utils
 
   def init do
-    {0x00, 0x00}
+    0x00
   end
 
-  def interrupt_enable({enable, _} = _intr), do: enable
-  def set_interrupt_enable({_, flag} = _intr, value), do: {value &&& 0b11111, flag}
+  def interrupt_enable(intr), do: intr >>> 5
+  # Keep lower 5 bits (=flag)
+  def set_interrupt_enable(intr, value), do: ((value &&& 0b11111) <<< 5) ||| (intr &&& 0b11111)
 
-  def interrupt_flag({_, flag} = _intr), do: flag
-  def set_interrupt_flag({enable, _} = _intr, value), do: {enable, value &&& 0b11111}
+  def interrupt_flag(intr), do: intr &&& 0b11111
+  # Keep higher 5 bits (=enable)
+  def set_interrupt_flag(intr, value), do: (intr &&& 0b11_1110_0000 ||| value &&& 0b11111)
 
   @vblank_bit 0b1
   @stat_bit 0b10
@@ -25,6 +27,7 @@ defmodule Gameboy.Interrupts do
   def serial, do: @serial_bit
   def joypad, do: @joypad_bit
 
+  # Interrupt priority: vblank > stat > timer > serial > joypad
   @intr_table 0..0b11_1111_1111
   |> Enum.map(fn x ->
     enable = x >>> 5
@@ -46,18 +49,19 @@ defmodule Gameboy.Interrupts do
   end)
   |> List.to_tuple()
 
-  def check({enable, flag} = _intr) do
+  def check(intr) do
     # Check if any enabled interrupt is requested
-    # Interrupt priority: vblank > stat > timer > serial > joypad
-    elem(@intr_table, (enable <<< 5) ||| flag)
+    elem(@intr_table, intr)
   end
 
-  def request({_, _} = intr, 0), do: intr
-  def request({enable, flag} = _intr, req) do
-    {enable, flag ||| req}
+  def request(intr, 0), do: intr
+  def request(intr, req) do
+    # Lower 5 bits is flag
+    intr ||| req
   end
 
-  def acknowledge({enable, flag} = _intr, mask) do
-    {enable, flag - mask}
+  def acknowledge(intr, mask) do
+    # Lower 5 bits is flag
+    intr - mask
   end
 end
