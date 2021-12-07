@@ -5,7 +5,7 @@ defmodule Gameboy.Test do
   end
 end
 # gb = Gameboy.init()
-{cpu, hw} = "state.gb"
+{cpu, hw} = "start.save"
             |> File.read!()
             |> :erlang.binary_to_term()
 gb = {cpu, Map.put(hw, :counter, 0)}

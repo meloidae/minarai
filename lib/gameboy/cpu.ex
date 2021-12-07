@@ -45,15 +45,15 @@ defmodule Gameboy.Cpu do
         # No interrupt is requested
         {cpu, hw}
       {addr, mask} ->
+        %{ime: ime, pc: pc, sp: sp, state: state} = cpu
         cond do
-          cpu.ime ->
+          ime ->
             # Add 8 cycles
             hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
             # Push value of pc on to stack
-            pc = cpu.pc
             low = pc &&& 0xff
             high = pc >>> 8
-            sp = (cpu.sp - 1) &&& 0xffff
+            sp = (sp - 1) &&& 0xffff
             hw = Hardware.synced_write(hw, sp, high)
             sp = (sp - 1) &&& 0xffff
             hw = Hardware.synced_write(hw, sp, low)
@@ -64,7 +64,7 @@ defmodule Gameboy.Cpu do
               # IO.puts("Resume with jump")
             # end
             {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, Map.put(hw, :intr, intr)}
-          cpu.state != :haltbug ->
+          state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
             # IO.puts("Resume no jump")
             {Map.put(cpu, :state, :running), hw}

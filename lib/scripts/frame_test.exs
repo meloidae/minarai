@@ -34,7 +34,7 @@ end
 # frames = 20 * 60
 frames = 60
 # gb = Gameboy.init()
-{cpu, hw} = "state.gb"
+{cpu, hw} = "start.save"
             |> File.read!()
             |> :erlang.binary_to_term()
 gb = {cpu, Map.put(hw, :counter, 0)}
