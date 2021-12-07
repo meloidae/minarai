@@ -138,7 +138,6 @@ defmodule Gameboy.Hardware do
 
   def synced_read(hw, addr) do
     high_addr = elem(@high_addr, addr)
-    # high_addr = (addr >>> 8) &&& 0xff
     _read(hw, addr, high_addr)
   end
 
@@ -280,38 +279,46 @@ defmodule Gameboy.Hardware do
     cond do
       high <= 0x7f ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :cart, Cartridge.set_bank_control(hw.cart, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :cart, Cartridge.set_bank_control(hw.cart, addr, value))
         end
       high <= 0x9f ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value))
         end
       high <= 0xbf ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :cart, Cartridge.write_ram(hw.cart, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :cart, Cartridge.write_ram(hw.cart, addr, value))
         end
       high <= 0xcf ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value))
         end
       high <= 0xdf ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value))
         end
       high <= 0xef ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value))
         end
       high <= 0xfd ->
         defp _write(hw, addr, value, unquote(high)) do
-          memory_cycle(hw, fn hw -> Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value)) end)
+          hw = cycle(hw)
+          Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value))
         end
       high == 0xfe ->
         defp _write(hw, addr, value, unquote(high)) do
           low = addr &&& 0xff
           if low <= 0x9f do
             # oam
-            memory_cycle(hw, fn hw -> Map.put(hw, :ppu, Ppu.write_oam(hw.ppu, low, value)) end)
+            hw = cycle(hw)
+            Map.put(hw, :ppu, Ppu.write_oam(hw.ppu, low, value))
           else
             # Ignore write to unsuable address and issue warning
             # Maybe implement oam corruption bug?
@@ -335,7 +342,6 @@ defmodule Gameboy.Hardware do
   end
 
   def write_ff(hw, addr, value) do
-    # IO.puts("write_ff: addr = #{Utils.to_hex(addr)}")
     case addr &&& 0xff do
       0x00 -> 
         memory_cycle(hw, fn hw -> Map.put(hw, :joypad, Joypad.set(hw.joypad, value)) end)
