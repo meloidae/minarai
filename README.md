@@ -2,11 +2,18 @@
 
 WIP: gameboy emulator written in Elixir
 
+## Current state
+- Functional graphics
+- Functiona keyboard controls
+- Supports mbc1 & mbc3
+- No frame throttling
+- No sound
+- (Pokemon Yellow is playable)
+- FPS is well above 60 on average, but drops below 60 once in every 15 frames or so
+  - Something to do with GC?
+
 ## Screenshots
 ![screenshot](README/ss_pikachu.png)
-
-At the moment, Pokemon Yellow seems to be playable.  
-The frame rate fluctuates quite a bit (40-80fps) and has no sound.  
 
 ## TODO
 - [x] bg rendering
