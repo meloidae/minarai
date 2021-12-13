@@ -1,12 +1,13 @@
 defmodule Minarai do
   @behaviour :wx_object
   use Bitwise
+  alias Gameboy.Utils
 
   @title 'Minarai'
   @width 160
   @height 144
   @scale 4
-  @size {@width * @scale, @height * @scale}
+  # @size {@width * @scale, @height * @scale}
   @save_path "state.save"
 
   #######
@@ -28,9 +29,24 @@ defmodule Minarai do
       _ ->
         @save_path
     end
+    case opts[:record_stats] do
+      true ->
+        :persistent_term.put({Minarai, :record_stats}, true)
+      _ ->
+        nil
+    end
+    scale = case opts[:scale] do
+      scale when is_integer(scale) ->
+        scale
+      _ ->
+        @scale
+    end
+
+    size = {@width * scale, @height * scale}
+
 
     wx = :wx.new([])
-    frame = :wxFrame.new(wx, :wx_const.wx_id_any, @title, [{:size, @size}])
+    frame = :wxFrame.new(wx, :wx_const.wx_id_any, @title, [{:size, size}])
     :wxWindow.connect(frame, :close_window)
     :wxFrame.show(frame)
 
@@ -40,7 +56,7 @@ defmodule Minarai do
                                 :wx_const.wx_gl_min_green, 8,
                                 :wx_const.wx_gl_min_blue, 8,
                                 :wx_const.wx_gl_depth_size, 24, 0]}]
-    canvas = :wxGLCanvas.new(frame, [size: @size] ++ gl_attrib)
+    canvas = :wxGLCanvas.new(frame, [size: size] ++ gl_attrib)
     ctx = :wxGLContext.new(canvas)
 
     :wxGLCanvas.connect(canvas, :size)
@@ -58,7 +74,7 @@ defmodule Minarai do
     state = %{
       frame: frame,
       canvas: canvas,
-      # timer: timer,
+      scale: scale,
       texture: texture,
       buffer: buffer,
       pid: Process.spawn(fn -> Gameboy.start(opts) end, [:link]),
@@ -99,7 +115,8 @@ defmodule Minarai do
       diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
       fps = 1_000_000 / diff
       :wxTopLevelWindow.setTitle(frame, "#{@title} [FPS: #{Float.round(fps, 2)}]")
-      [fps | fps_stats]
+      # [fps | fps_stats]
+      []
     else
       []
     end
@@ -147,20 +164,21 @@ defmodule Minarai do
   # Log fps stats
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, ?F, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, %{fps: fps_stats} = state) do
+  }, %{pid: pid} = state) do
     # Log fps stats to file
-    fps_output = fps_stats
-             |> Enum.reverse()
-             |> Stream.with_index()
-             |> Enum.map(fn {fps, i} -> "#{i + 1},#{fps}\n" end)
-             |> IO.iodata_to_binary()
-    File.open("log/fps.csv", [:write], fn file ->
-      IO.write(file, "frame,fps\n")
-      IO.write(file, fps_output)
-    end)
-    IO.puts("Wrote fps stats to: log/fps.csv")
+    # fps_output = fps_stats
+    #          |> Enum.reverse()
+    #          |> Stream.with_index()
+    #          |> Enum.map(fn {fps, i} -> "#{i + 1},#{fps}\n" end)
+    #          |> IO.iodata_to_binary()
+    # File.open("log/fps.csv", [:write], fn file ->
+    #   IO.write(file, "frame,fps\n")
+    #   IO.write(file, fps_output)
+    # end)
+    # IO.puts("Wrote fps stats to: log/fps.csv")
+    send(pid, {:save_latency, "log/stats.csv"})
     # Clear fps stats
-    {:noreply, %{state | fps: []}}
+    {:noreply, state}
   end
 
   # Game controls
@@ -294,11 +312,11 @@ defmodule Minarai do
     :ok
   end
 
-  defp draw_texture(x, y, %{tex_id: tex_id, w: w, h: h}) do
+  defp draw_texture(x, y, scale, %{tex_id: tex_id, w: w, h: h}) do
     :gl.clear(Bitwise.bor(:gl_const.gl_color_buffer_bit, :gl_const.gl_depth_buffer_bit))
     :gl.loadIdentity()
     :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
-    :gl.scalef(@scale / 0.5, @scale / 0.5, 0.0)
+    :gl.scalef(scale / 0.5, scale / 0.5, 0.0)
     :gl.begin(:gl_const.gl_triangle_strip)
     :gl.texCoord2f(0.0, 0.0)
     :gl.vertex2i(x, y)
@@ -313,7 +331,7 @@ defmodule Minarai do
   end
 
 
-  defp render(%{canvas: canvas, texture: texture, buffer: buffer} = _state) do
+  defp render(%{canvas: canvas, texture: texture, scale: scale, buffer: buffer} = _state) do
     # Update texture with new screen buffer
     :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
       0, 0,
@@ -321,7 +339,7 @@ defmodule Minarai do
       :gl_const.gl_rgb,
       :gl_const.gl_unsigned_byte,
       buffer)
-    draw_texture(0, 0, texture)
+    draw_texture(0, 0, scale, texture)
     :wxGLCanvas.swapBuffers(canvas)
     :ok
   end
