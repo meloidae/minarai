@@ -25,8 +25,9 @@ Controls are:
 - FPS is well above 60 on average, but drops below 60 once in every 15 frames or so
   - Something to do with GC?
 
-## Screenshots
-![screenshot](README/ss_pikachu.png)
+## GIFs
+![intro](README/intro.gif)
+![stopped_by_prof](README/stopped_by_prof.gif)
 
 ## TODO
 - [x] bg rendering
