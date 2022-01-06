@@ -333,7 +333,7 @@ defmodule Gameboy.Hardware do
           else
             # Ignore write to unsuable address and issue warning
             # Maybe implement oam corruption bug?
-            IO.warn("Write to unsuable address #{Utils.to_hex(addr)}")
+            IO.warn("Write to unusable address #{Utils.to_hex(addr)}")
             cycle(hw)
           end
         end
