@@ -17,10 +17,10 @@ defmodule Gameboy.Hardware do
   defstruct bootrom: nil,
             cart: struct(Cartridge),
             ppu: struct(Ppu),
-            wram: struct(Wram),
-            hram: struct(Hram),
-            apu: struct(Apu),
-            timer: struct(Timer),
+            wram: nil,
+            hram: nil,
+            apu: nil,
+            timer: nil, 
             intr: nil,
             dma: nil,
             serial: struct(Serial),
@@ -29,11 +29,12 @@ defmodule Gameboy.Hardware do
 
   @high_addr 0..0xffff |> Enum.map(fn x -> (x >>> 8) &&& 0xff end) |> List.to_tuple()
   @low_addr 0..0xffff |> Enum.map(fn x -> x &&& 0xff end) |> List.to_tuple()
+  @cycles_per_frame 17556
 
   def synced_read_high(hw, addr), do: synced_read(hw, 0xff00 ||| addr)
   def synced_write_high(hw, addr, data), do: synced_write(hw, 0xff00 ||| addr, data)
   def sync_cycle(hw) do
-    Hardware.cycle(hw)
+    cycle(hw)
   end
 
   def init(opts \\ []) do
@@ -264,7 +265,7 @@ defmodule Gameboy.Hardware do
     end
   end
 
-  def read_ff(hw, addr) do
+  defp read_ff(hw, addr) do
     # low = addr &&& 0xff
     low = elem(@low_addr, addr)
     _read_ff(hw, addr, low)
@@ -341,7 +342,7 @@ defmodule Gameboy.Hardware do
     _write(hw, addr, value, high_addr)
   end
 
-  def write_ff(hw, addr, value) do
+  defp write_ff(hw, addr, value) do
     case addr &&& 0xff do
       0x00 -> 
         memory_cycle(hw, fn hw -> Map.put(hw, :joypad, Joypad.set(hw.joypad, value)) end)
@@ -438,7 +439,7 @@ defmodule Gameboy.Hardware do
     raise "dma read from #{Utils.to_hex(addr)} is not supported"
   end
 
-  def memory_cycle(hw, memory_fn) do
+  defp memory_cycle(hw, memory_fn) do
     hw = cycle(hw)
     memory_fn.(hw)
   end
@@ -512,7 +513,7 @@ defmodule Gameboy.Hardware do
   end
 
   # DMA is requested
-  def cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
+  defp cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -531,7 +532,7 @@ defmodule Gameboy.Hardware do
     end
   end
   # No DMA
-  def cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
+  defp cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
