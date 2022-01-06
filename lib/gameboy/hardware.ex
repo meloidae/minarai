@@ -72,6 +72,16 @@ defmodule Gameboy.Hardware do
     }
   end
 
+  def keydown(%Hardware{joypad: joypad, intr: intr} = hw, key_name) do
+    {joypad, req} = Joypad.keydown(joypad, key_name)
+    intr = Interrupts.request(intr, req)
+    %{hw | joypad: joypad, intr: intr}
+  end
+
+  def keyup(%Hardware{joypad: joypad} = hw, key_name) do
+    Map.put(hw, :joypad, Joypad.keyup(joypad, key_name))
+  end
+
   defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
     hw = cycle(hw)
     {Bootrom.read(bootrom, addr), hw}
