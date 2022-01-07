@@ -3,6 +3,7 @@ defmodule Gameboy.SimplePpu do
   alias Gameboy.Memory
   alias Gameboy.SimplePpu, as: Ppu
   alias Gameboy.Interrupts
+  alias Gameboy.Utils
 
   @vram_size 0x4000
   @oam_size 0xa0
@@ -291,6 +292,7 @@ defmodule Gameboy.SimplePpu do
   # @tiles_per_row 20
   # @color {<<155, 188, 15>>, <<139, 172, 15>>, <<48, 98, 48>>, <<15, 65, 15>>}
   @color {<<0xe0, 0xf0, 0xe7>>, <<0x8b, 0xa3, 0x94>>, <<0x55, 0x64, 0x5a>>, <<0x34, 0x3d, 0x37>>}
+  # @color {[0xe0, 0xf0, 0xe7], [0x8b, 0xa3, 0x94], [0x55, 0x64, 0x5a], [0x34, 0x3d, 0x37]}
   @tile_id_8800 0..0xff
   |> Enum.map(fn x -> if x < 0x80, do: x, else: x - 256 end)
   |> List.to_tuple()
@@ -622,5 +624,10 @@ defmodule Gameboy.SimplePpu do
   defp vblank(ppu) do
     data = ppu.buffer |> IO.iodata_to_binary()
     send(Minarai, {:update, data})
+    if :persistent_term.get({Minarai, :record_stats}, false) do
+      # Record timestamp
+      _frame_count = Utils.store_timestamp()
+      # if rem(frame_count, 5) === 0, do: :erlang.garbage_collect()
+    end
   end
 end

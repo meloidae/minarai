@@ -9,54 +9,54 @@ defmodule Gameboy do
   alias Gameboy.Interrupts
   alias Gameboy.Utils
 
-  # defstruct cpu: struct(Cpu), hw: struct(Hardware)
 
   def init(opts \\ nil) do
     cpu = Cpu.init()
     hw = Hardware.init(opts)
-    # %Gameboy{cpu: cpu, hw: hw}
+    # IO.puts("#{inspect(:erlang.process_info(self()))}")
+    if :persistent_term.get({Minarai, :record_stats}, false) do
+      Utils.init_stats_table()
+    end
     {cpu, hw}
   end
 
-  # def step(%{cpu: cpu, hw: hw} = gb) do
-  def step({cpu, hw} = _gb) do
+  def step({cpu, hw} = gb) do
     {cpu, hw} = receive do
       {:save, path} ->
-        save_state({cpu, hw}, path)
-        {cpu, hw}
+        save_state(gb, path)
+        gb
       {:load, path} ->
         load_state(path)
+      {:save_latency, path} ->
+        if :persistent_term.get({Minarai, :record_stats}, false) do
+          Utils.save_frame_stats(path)
+        else
+          IO.puts("--record_stats option is not enabled")
+        end
+        gb
       {:key_down, key_name} ->
-        %{joypad: joypad, intr: intr} = hw
-        {joypad, req} = Joypad.keydown(joypad, key_name)
-        intr = Interrupts.request(intr, req)
-        {cpu, %{hw | joypad: joypad, intr: intr}}
+        hw = Hardware.keydown(hw, key_name)
+        {cpu, hw}
       {:key_up, key_name} ->
-        {cpu, Map.put(hw, :joypad, Joypad.keyup(hw.joypad, key_name))}
+        hw = Hardware.keyup(hw, key_name)
+        {cpu, hw}
     after
       0 ->
-        {cpu, hw}
+        gb
     end
     # Handle interrupts
     {%{pc: pc, state: state} = cpu, hw} = handle_interrupt(cpu, hw)
     case state do
       :running ->
         {cpu, hw} = fetch_next(cpu, hw, pc)
-        # {cpu, hw} = decode_exec(cpu, hw)
         decode_exec(cpu, hw)
-        # %{gb | cpu: cpu, hw: hw}
       :haltbug ->
         # Halt bug. Fetch but don't increment pc
-        # IO.puts("Resolving halt bug")
-        # pc = pc
         {cpu, hw} = fetch_next(cpu, hw, pc)
         cpu = %{cpu | pc: pc, state: :running}
-        # {cpu, hw} = decode_exec(cpu, hw)
         decode_exec(cpu, hw)
-        # %{gb | cpu: cpu, hw: hw}
       :halt ->
         # IO.puts("Halt")
-        # %{gb | cpu: cpu, hw: Hardware.sync_cycle(hw)}
         {cpu, Hardware.sync_cycle(hw)}
       _ -> # stop?
         # IO.puts("stop")

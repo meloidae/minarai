@@ -5,9 +5,9 @@ defmodule Gameboy.Test.Frame do
   def run_frame({_, %{counter: counter}} = gb) when counter >= @counter_frame, do: gb
   def run_frame(gb), do: run_frame(Gameboy.step(gb))
   def run_frames_fps(gb, 0, fps_info), do: {gb, fps_info}
-  def run_frames_fps(gb, 4 = n, fps_info) do
+  def run_frames_fps(gb, 16 = n, fps_info) do
     start_time = System.monotonic_time()
-    Fprof.profile(fn -> run_frame(gb) end, [:callers, :details])
+    Fprof.profile(fn -> run_frame(gb) end, [callers: true, details: true])
     gb = run_frame(gb)
     end_time = System.monotonic_time()
     {cpu, hw} = gb

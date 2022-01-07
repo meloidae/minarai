@@ -17,7 +17,7 @@ Controls are:
 
 ## Current state
 - Functional graphics
-- Functiona keyboard controls
+- Functional keyboard controls
 - Supports mbc1 & mbc3 (no RTC functionality)
 - No frame throttling (runs much faster than 59.7fps on my laptop)
 - No sound
