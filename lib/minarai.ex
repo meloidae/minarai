@@ -23,6 +23,7 @@ defmodule Minarai do
   # :wx_object behavior callbacks #
   #################################
   def init(opts) do
+    :persistent_term.put({Minarai, :ui_pid}, self())
     save_path = case Access.fetch(opts, :save_path) do
       {:ok, path} ->
         path
@@ -71,13 +72,14 @@ defmodule Minarai do
 
     keys = %{start: false, select: false, b: false, a: false, down: false, up: false, left: false, right: false}
 
+    spawn_opt = [:link]
     state = %{
       frame: frame,
       canvas: canvas,
       scale: scale,
       texture: texture,
       buffer: buffer,
-      pid: Process.spawn(fn -> Gameboy.start(opts) end, [:link]),
+      pid: Process.spawn(fn -> Gameboy.start(opts) end, spawn_opt),
       prev_time: nil,
       fps: [],
       keys: keys,
