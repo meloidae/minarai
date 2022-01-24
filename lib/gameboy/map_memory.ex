@@ -1,4 +1,5 @@
 defmodule Gameboy.MapMemory do
+  use Bitwise
   alias Gameboy.MapMemory
 
   def init(size) do
@@ -11,9 +12,18 @@ defmodule Gameboy.MapMemory do
     value
   end
 
+  def read_range(data, addr, len), do: map2list(data, addr, addr + len - 1)
+
   def read_binary(data, addr, len) do
     map2list(data, addr, addr + len - 1)
     |> IO.iodata_to_binary()
+  end
+
+  def read_short(data, addr) do
+    %{^addr => high} = data
+    addr = addr + 1
+    %{^addr => low} = data
+    (high <<< 8) ||| low
   end
 
   def write(data, addr, value), do: Map.put(data, addr, value)
