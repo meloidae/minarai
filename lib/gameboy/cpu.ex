@@ -4,6 +4,7 @@ defmodule Gameboy.Cpu do
   alias Gameboy.Hardware
   alias Gameboy.Interrupts
   alias Gameboy.Utils
+  alias Gameboy.Cpu.Disassemble
 
   defstruct a: 0x00,
             f: 0x00,
@@ -34,13 +35,15 @@ defmodule Gameboy.Cpu do
   # Fetch opcode for instruction and increment pc
   def fetch_next(cpu, hw, addr) do
     {opcode, hw} = Hardware.synced_read(hw, addr)
-    # {write_register(Map.put(cpu, :opcode, opcode), :pc, (addr + 1) &&& 0xffff), hw}
+    if :persistent_term.get({Minarai, :count_fn_calls}, false) do
+      Utils.update_counter(Disassemble.disassemble(opcode, cpu, hw))
+    end
     {%{cpu | opcode: opcode, pc: (addr + 1) &&& 0xffff}, hw}
   end
 
   # handle interrupt TODO
-  def handle_interrupt(%Cpu{} = cpu, %Hardware{intr: intr} = hw) do
-    case Interrupts.check(intr) do
+  def handle_interrupt(%Cpu{} = cpu, hw) do
+    case Hardware.check_interrupt(hw) do
       nil ->
         # No interrupt is requested
         {cpu, hw}
@@ -58,12 +61,12 @@ defmodule Gameboy.Cpu do
             sp = (sp - 1) &&& 0xffff
             hw = Hardware.synced_write(hw, sp, low)
             # Acknowledge interrupt
-            intr = Interrupts.acknowledge(hw.intr, mask)
+            hw = Hardware.acknowledge_interrupt(hw, mask)
             # Change pc to address specified by interrupt and switch to running state
             # if cpu.state != :running do
               # IO.puts("Resume with jump")
             # end
-            {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, Map.put(hw, :intr, intr)}
+            {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, hw}
           state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
             # IO.puts("Resume no jump")
@@ -232,6 +235,18 @@ defmodule Gameboy.Cpu do
   end
   def add_u8_byte_carry(a, b, _), do: add_u8_byte_carry(a, b)
 
+  # Increment u8, only return the result and half carry (ignore carry)
+  @inc_u8_byte_carry 0..0xff
+  |> Enum.map(fn x ->
+    sum = (x + 1) &&& 0xff
+    half_carry = (((x &&& 0xf) + 1) &&& 0x10) != 0
+    {sum, half_carry}
+  end)
+  |> List.to_tuple()
+  def inc_u8_byte_carry(value) do
+    elem(@inc_u8_byte_carry, value)
+  end
+
   # Add two u8 values and c flag, then get carries from bit 7 (carry) and bit 3 (half carry)
   def adc_u8_byte_carry(a, b, cpu) do
     c = if flag(cpu, :c), do: 1, else: 0
@@ -249,6 +264,18 @@ defmodule Gameboy.Cpu do
     {diff, carry, half_carry}
   end
   def sub_u8_byte_carry(a, b, _), do: sub_u8_byte_carry(a, b)
+
+  # Decrement u8, only return the result and half carry (ignore carry)
+  @dec_u8_byte_carry 0..0xff
+  |> Enum.map(fn x ->
+    diff = (x - 1) &&& 0xff
+    half_carry = (x &&& 0xf) < 1
+    {diff, half_carry}
+  end)
+  |> List.to_tuple()
+  def dec_u8_byte_carry(value) do
+    elem(@dec_u8_byte_carry, value)
+  end
 
   # Sub u8 and c flag from u8, then get carries from bit 7 (carry) and bit 3 (half carry)
   def sbc_u8_byte_carry(a, b, cpu) do
