@@ -5,7 +5,7 @@ defmodule Gameboy.Utils do
     if zeros > 0, do: "#{String.duplicate("0", zeros)}#{num_string}", else: num_string
   end
 
-  def break_point(%{cpu: cpu} = gb, target_pc \\ 0x001c) do
+  def break_point(%{cpu: cpu} = _gb, target_pc \\ 0x001c) do
     cpu.pc == target_pc
   end
 
@@ -16,7 +16,8 @@ defmodule Gameboy.Utils do
   end
 
   @stats_table :stats_table
-  def stats_table_name, do: @stats_table
+  @counter_table :counter_table
+  def stats_table, do: @stats_table
 
   def init_stats_table do
     :ets.new(@stats_table, [:named_table])
@@ -26,7 +27,7 @@ defmodule Gameboy.Utils do
   def store_timestamp do
     # Stores current statistical information to ets
     # Returns how many stats points are stored at that moment
-    [{_, index} | _] = :ets.lookup(@stats_table, :counter)
+    index = :ets.lookup_element(@stats_table, :counter, 2)
     curr_time = System.monotonic_time()
     mem = :erlang.memory(:total)
     info = :erlang.process_info(self(), [:memory, :total_heap_size, :heap_size, :stack_size])
@@ -36,9 +37,9 @@ defmodule Gameboy.Utils do
   end
 
   def save_frame_stats(path) do
-    [{_, index} | _] = :ets.lookup(@stats_table, :counter)
+    index = :ets.lookup_element(@stats_table, :counter, 2)
     index = index - 1
-    [{_, last, _, _} | _] = :ets.lookup(@stats_table, index)
+    last = :ets.lookup_element(@stats_table, index, 2)
     {stats, _} = index - 1..0
     |> Enum.reduce({[], last}, fn i, {acc, future} ->
       [{_, now, total_memory, [memory: memory, total_heap_size: total_heap_size, heap_size: heap_size, stack_size: stack_size]} | _] = :ets.lookup(@stats_table, i)
@@ -54,5 +55,33 @@ defmodule Gameboy.Utils do
     IO.puts("Stats saved to: #{path}")
     # Reset index value
     :ets.insert(@stats_table, {:counter, 0})
+    fn_counts = :ets.tab2list(@counter_table)
+    if fn_counts != [] do
+      fn_counts = Enum.sort(fn_counts, fn {_, i}, {_, j} -> i >= j end)
+      File.open("log/fn_counts.txt", [:write], fn file ->
+        fn_counts |> Enum.each(fn {name, count} ->
+          IO.write(file, "#{name}\t#{count}\n")
+        end)
+      end)
+    end
+  end
+
+  def get_frame_counter do
+    case :ets.lookup(@stats_table, :counter) do
+      [{_, index} | _] ->
+        index
+      _ ->
+      -1
+    end
+  end
+
+  def counter_table, do: @counter_table
+
+  def init_counter_table do
+    :ets.new(@counter_table, [:named_table])
+  end
+
+  def update_counter(name) do
+    :ets.update_counter(@counter_table, name, 1, {name, 0})
   end
 end
