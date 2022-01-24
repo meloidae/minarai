@@ -16,6 +16,7 @@ defmodule Gameboy do
     # IO.puts("#{inspect(:erlang.process_info(self()))}")
     if :persistent_term.get({Minarai, :record_stats}, false) do
       Utils.init_stats_table()
+      Utils.init_counter_table()
     end
     {cpu, hw}
   end
@@ -43,6 +44,10 @@ defmodule Gameboy do
     after
       0 ->
         gb
+    end
+    if :persistent_term.get({Minarai, :print_count}, false) do
+      IO.puts("count: #{hw.counter}")
+      :persistent_term.put({Minarai, :print_count}, false)
     end
     # Handle interrupts
     {%{pc: pc, state: state} = cpu, hw} = handle_interrupt(cpu, hw)
