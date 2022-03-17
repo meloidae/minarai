@@ -72,6 +72,7 @@ defmodule Minarai do
 
     keys = %{start: false, select: false, b: false, a: false, down: false, up: false, left: false, right: false}
 
+    gb = Gameboy.init(opts)
     spawn_opt = [:link]
     state = %{
       frame: frame,
@@ -79,12 +80,14 @@ defmodule Minarai do
       scale: scale,
       texture: texture,
       buffer: buffer,
-      pid: Process.spawn(fn -> Gameboy.start(opts) end, spawn_opt),
+      pid: Process.spawn(fn -> Gameboy.run(gb) end, spawn_opt),
       prev_time: nil,
       fps: [],
       keys: keys,
       save_path: save_path,
     }
+
+    :erlang.trace(state.pid, true, [:garbage_collection, tracer: self()])
 
     {frame, state}
   end
@@ -109,6 +112,26 @@ defmodule Minarai do
     # :timer.cancel(state.timer)
     :wxGLCanvas.destroy(state.canvas)
     {:stop, :normal, state}
+  end
+
+  def handle_info({:trace, _pid, flag, info}, state) do
+    if flag == :gc_major_start do
+      count = Process.get(:gc_major_count)
+      count = if count == nil, do: 1, else: count + 1
+      IO.puts("#{flag} = #{count}")
+      if :ets.whereis(:stats_table) != :undefined do
+        case :ets.lookup(:stats_table, :counter) do
+          [{:counter, index} | _] -> IO.puts("frame = #{index}")
+          _ -> nil
+        end
+      end
+      Process.put(:gc_major_count, count)
+    end
+    {:noreply, state}
+  end
+
+  def handle_info({:change_pid, pid}, state) do
+    {:noreply, %{state | pid: pid}}
   end
 
   def handle_info({:update, buffer}, %{frame: frame, prev_time: prev_time, fps: fps_stats} = state) do
