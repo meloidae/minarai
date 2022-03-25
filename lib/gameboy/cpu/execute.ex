@@ -3,7 +3,6 @@ defmodule Gameboy.Cpu.Execute do
   # alias Gameboy.Cpu
   alias Gameboy.RecordCpu, as: Cpu
   alias Gameboy.Hardware
-  alias Gameboy.Interrupts
   alias Gameboy.Utils
 
   # 8 bit load
