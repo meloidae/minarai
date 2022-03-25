@@ -2,7 +2,6 @@ defmodule Gameboy.Cpu do
   use Bitwise
   alias Gameboy.Cpu
   alias Gameboy.Hardware
-  alias Gameboy.Interrupts
   alias Gameboy.Utils
   alias Gameboy.Cpu.Disassemble
 
@@ -18,12 +17,20 @@ defmodule Gameboy.Cpu do
             sp: 0x0000,
             opcode: 0x0,
             ime: false,
-            delayed_set_ime: nil, 
+            delayed_ime: nil, 
             state: :running
 
   defimpl Inspect, for: Cpu do
     def inspect(cpu, _) do
-      "pc: #{Utils.to_hex(cpu.pc)} op: #{Utils.to_hex(cpu.opcode)} sp: #{Utils.to_hex(cpu.sp)} af: #{Utils.to_hex(Cpu.read_register(cpu, :af))} bc: #{Utils.to_hex(Cpu.read_register(cpu, :bc))} de: #{Utils.to_hex(Cpu.read_register(cpu, :de))} hl: #{Utils.to_hex(Cpu.read_register(cpu, :hl))}"
+      [
+        "pc: #{Utils.to_hex(cpu.pc)} ",
+        "op: #{Utils.to_hex(cpu.opcode)} ",
+        "sp: #{Utils.to_hex(cpu.sp)} ",
+        "af: #{Utils.to_hex(Cpu.read_register(cpu, :af))} ",
+        "bc: #{Utils.to_hex(Cpu.read_register(cpu, :bc))} ",
+        "de: #{Utils.to_hex(Cpu.read_register(cpu, :de))} ",
+        "hl: #{Utils.to_hex(Cpu.read_register(cpu, :hl))}"
+      ] |> IO.iodata_to_binary()
     end
   end
 
@@ -79,13 +86,13 @@ defmodule Gameboy.Cpu do
   end
 
   # 16-bit reads from a register
+  @compile {:inline, read_register: 2}
   def read_register(%Cpu{a: a, f: f}, :af), do: (a <<< 8) ||| f
   def read_register(%Cpu{b: b, c: c}, :bc), do: (b <<< 8) ||| c
   def read_register(%Cpu{d: d, e: e}, :de), do: (d <<< 8) ||| e
   def read_register(%Cpu{h: h, l: l}, :hl), do: (h <<< 8) ||| l
   def read_register(%Cpu{pc: pc}, :pc), do: pc
   def read_register(%Cpu{sp: sp}, :sp), do: sp
-
 
   # 8 bit reads from a register
   def read_register(%Cpu{a: a}, :a), do: a
@@ -99,15 +106,13 @@ defmodule Gameboy.Cpu do
 
 
   # 16-bit writes to a register
+  @compile {:inline, write_register: 3}
   def write_register(%Cpu{} = cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xf0}  # lower nibble of f is always zero
   def write_register(%Cpu{} = cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
   def write_register(%Cpu{} = cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
   def write_register(%Cpu{} = cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
   def write_register(%Cpu{} = cpu, :pc, data), do: Map.put(cpu, :pc, data)
   def write_register(%Cpu{} = cpu, :sp, data), do: Map.put(cpu, :sp, data)
-  # def write_register(cpu, :pc, data), do: %{cpu | pc: data}
-  # def write_register(cpu, :sp, data), do: %{cpu | sp: data}
-
 
   # 8-bit writes to a register
   def write_register(%Cpu{} = cpu, :a, data), do: Map.put(cpu, :a, data)
@@ -159,32 +164,15 @@ defmodule Gameboy.Cpu do
     f = compute_flags(flags, cpu.f)
     Map.put(cpu, :f, f)
   end
-  def compute_flags([], value), do: value
-  def compute_flags([{:z, true} | t], value) do
-    compute_flags(t, value ||| 0x80)
-  end
-  def compute_flags([{:z, false} | t], value) do
-    compute_flags(t, value &&& 0x7f)
-  end
-  def compute_flags([{:n, true} | t], value) do
-    compute_flags(t, value ||| 0x40)
-  end
-  def compute_flags([{:n, false} | t], value) do
-    compute_flags(t, value &&& 0xbf)
-  end
-  def compute_flags([{:h, true} | t], value) do
-    compute_flags(t, value ||| 0x20)
-  end
-  def compute_flags([{:h, false} | t], value) do
-    compute_flags(t, value &&& 0xdf)
-  end
-  def compute_flags([{:c, true} | t], value) do
-    compute_flags(t, value ||| 0x10)
-  end
-  def compute_flags([{:c, false} | t], value) do
-    compute_flags(t, value &&& 0xef)
-  end
-
+  defp compute_flags([], value), do: value
+  defp compute_flags([{:z, true} | t], value), do: compute_flags(t, value ||| 0x80)
+  defp compute_flags([{:z, false} | t], value), do: compute_flags(t, value &&& 0x7f)
+  defp compute_flags([{:n, true} | t], value), do: compute_flags(t, value ||| 0x40)
+  defp compute_flags([{:n, false} | t], value), do: compute_flags(t, value &&& 0xbf)
+  defp compute_flags([{:h, true} | t], value), do: compute_flags(t, value ||| 0x20)
+  defp compute_flags([{:h, false} | t], value), do: compute_flags(t, value &&& 0xdf)
+  defp compute_flags([{:c, true} | t], value), do: compute_flags(t, value ||| 0x10)
+  defp compute_flags([{:c, false} | t], value), do: compute_flags(t, value &&& 0xef)
 
   @z_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   def flag(cpu, :z), do: elem(@z_table, cpu.f)
@@ -530,5 +518,28 @@ defmodule Gameboy.Cpu do
     addr = 0xff00 ||| addr
     {cpu, Hardware.synced_write(hw, addr, data)}
   end
+
+  # Update pc and enable interrupt immediately (used for RETI instruction)
+  @compile {:inline, return_from_interrupt: 2}
+  def return_from_interrupt(cpu, ret_addr) do
+    %{cpu | pc: ret_addr, ime: true}
+  end
+
+  @compile {:inline, set_ime: 2, ime: 1, apply_delayed_ime: 2}
+  def ime(cpu), do: cpu.ime
+  def set_ime(cpu, value), do: Map.put(cpu, :ime, value)
+  # Copy ime value from delayed_ime and set delayed_ime to nil
+  def apply_delayed_ime(cpu, value), do: %{cpu | ime: value, delayed_ime: nil}
+
+  @compile {:inline, set_delayed_ime: 2, delayed_ime: 1}
+  def set_delayed_ime(cpu, value), do: Map.put(cpu, :delayed_ime, value)
+  def delayed_ime(cpu), do: cpu.delayed_ime
+
+  @compile {:inline, set_state: 2, state: 1}
+  def state(cpu), do: cpu.state
+  def set_state(cpu, state), do: Map.put(cpu, :state, state)
+
+  @compile {:inline, opcode: 1}
+  def opcode(cpu), do: cpu.opcode
 
 end
