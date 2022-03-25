@@ -1,9 +1,10 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
-  alias Gameboy.Cpu
-  alias Gameboy.SimplePpu, as: Ppu
-  import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
-  import Gameboy.Cpu.Decode, only: [decode_exec: 2]
+  # alias Gameboy.Cpu
+  alias Gameboy.RecordCpu, as: Cpu
+  # import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
+  # import Gameboy.Cpu.Decode, only: [decode_exec: 2]
+  import Gameboy.Cpu.Decode, only: [cpu_step: 2]
   import Gameboy.Cpu.Disassemble, only: [disassemble: 3]
   alias Gameboy.Joypad
   alias Gameboy.Interrupts
@@ -18,6 +19,11 @@ defmodule Gameboy do
       Utils.init_stats_table()
       Utils.init_counter_table()
     end
+    # Store read-only terms
+    # cartrom = Hardware.get_cart(hw).rom
+    # {bootrom, _} = Hardware.get_bootrom(hw)
+    # :persistent_term.put({Minarai, :cartrom}, cartrom)
+    # :persistent_term.put({Minarai, :bootrom}, bootrom)
     {cpu, hw}
   end
 
@@ -49,25 +55,26 @@ defmodule Gameboy do
       IO.puts("count: #{hw.counter}")
       :persistent_term.put({Minarai, :print_count}, false)
     end
-    # Handle interrupts
-    {%{pc: pc, state: state} = cpu, hw} = handle_interrupt(cpu, hw)
-    case state do
-      :running ->
-        {cpu, hw} = fetch_next(cpu, hw, pc)
-        decode_exec(cpu, hw)
-      :haltbug ->
-        # Halt bug. Fetch but don't increment pc
-        {cpu, hw} = fetch_next(cpu, hw, pc)
-        cpu = %{cpu | pc: pc, state: :running}
-        decode_exec(cpu, hw)
-      :halt ->
-        # IO.puts("Halt")
-        {cpu, Hardware.sync_cycle(hw)}
-      _ -> # stop?
-        # IO.puts("stop")
-        # gb
-        {cpu, hw}
-    end
+    cpu_step(cpu, hw)
+    # {cpu, hw} = handle_interrupt(cpu, hw)
+    # %{pc: pc, state: state} = cpu
+    # case state do
+    #   :running ->
+    #     {cpu, hw} = fetch_next(cpu, hw, pc)
+    #     decode_exec(cpu, hw)
+    #   :haltbug ->
+    #     # Halt bug. Fetch but don't increment pc
+    #     {cpu, hw} = fetch_next(cpu, hw, pc)
+    #     cpu = %{cpu | pc: pc, state: :running}
+    #     decode_exec(cpu, hw)
+    #   :halt ->
+    #     # IO.puts("Halt")
+    #     {cpu, Hardware.sync_cycle(hw)}
+    #   _ -> # stop?
+    #     # IO.puts("stop")
+    #     # gb
+    #     {cpu, hw}
+    # end
   end
 
   def start(opts \\ []) do
@@ -75,7 +82,25 @@ defmodule Gameboy do
     loop(gb)
   end
 
+  def run({cpu, hw}) do
+    # hw = Hardware.recover_rom(hw)
+    loop({cpu, hw})
+  end
+
+  @ten_frames 17556 * 40
   defp loop(gb), do: loop(Gameboy.step(gb))
+  # defp loop({cpu, hw} = gb) do
+  #   counter = Hardware.get_counter(hw)
+  #   if counter < @ten_frames do
+  #     loop(Gameboy.step(gb))
+  #   else
+  #     new_counter = counter - @ten_frames
+  #     hw = Hardware.set_counter(hw, new_counter)
+  #     # hw = Hardware.prepare_for_copy(hw)
+  #     pid = Process.spawn(fn -> run({cpu, hw}) end, [:link])
+  #     send(Minarai, {:change_pid, pid})
+  #   end
+  # end
 
   @break 0x1000
   def debug_start(opts \\ []) do

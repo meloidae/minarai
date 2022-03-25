@@ -1,20 +1,57 @@
 defmodule Gameboy.Cpu.Decode do
-  alias Gameboy.Cpu
+  # alias Gameboy.Cpu
+  alias Gameboy.RecordCpu, as: Cpu
   alias Gameboy.Cpu.Execute, as: Exec
   alias Gameboy.Utils
+  alias Gameboy.Hardware
 
-  def decode_exec(%{opcode: opcode, delayed_set_ime: nil} = cpu, hw) do
-    instruction(opcode, cpu, hw)
+  def cpu_step(cpu, hw) do
+    {cpu, hw} = Cpu.handle_interrupt(cpu, hw)
+    state = Cpu.state(cpu)
+    case state do
+      :running ->
+        {cpu, hw} = Cpu.fetch_next(cpu, hw, Cpu.read_register(cpu, :pc))
+        decode_exec(cpu, hw)
+      :haltbug ->
+        # Halt bug. Fetch but don't increment pc
+        pc = Cpu.read_register(cpu, :pc)
+        {cpu, hw} = Cpu.fetch_next(cpu, hw, pc)
+        cpu = Cpu.write_register(cpu, :pc, pc)
+              |> Cpu.set_state(:running)
+        decode_exec(cpu, hw)
+      :halt ->
+        # IO.puts("Halt")
+        {cpu, Hardware.sync_cycle(hw)}
+      _ -> # stop?
+        # IO.puts("stop")
+        {cpu, hw}
+    end
   end
-  def decode_exec(%{opcode: opcode, delayed_set_ime: ime_value} = cpu, hw) do
-    {cpu, hw} = instruction(opcode, cpu, hw)
-    {%{cpu | ime: ime_value, delayed_set_ime: nil}, hw}
+
+  # def decode_exec(%{opcode: opcode, delayed_ime: nil} = cpu, hw) do
+  #   instruction(opcode, cpu, hw)
+  # end
+  # def decode_exec(%{opcode: opcode, delayed_ime: ime_value} = cpu, hw) do
+  #   {cpu, hw} = instruction(opcode, cpu, hw)
+  #   # {%{cpu | ime: ime_value, delayed_ime: nil}, hw}
+  #   {Cpu.apply_delayed_ime(cpu), hw}
+  # end
+
+  def decode_exec(cpu, hw) do
+    opcode = Cpu.opcode(cpu)
+    delayed_ime = Cpu.delayed_ime(cpu)
+    if delayed_ime == nil do
+      instruction(opcode, cpu, hw)
+    else
+      {cpu, hw} = instruction(opcode, cpu, hw)
+      {Cpu.apply_delayed_ime(cpu, delayed_ime), hw}
+    end
   end
 
   def cb_prefix(cpu, hw) do
-    {cpu, hw} = Cpu.fetch_next(cpu, hw, cpu.pc)
+    {cpu, hw} = Cpu.fetch_next(cpu, hw, Cpu.read_register(cpu, :pc))
     # IO.puts("CB #{Utils.to_hex(cpu.opcode, 2)}")
-    cb_instruction(cpu.opcode, cpu, hw)
+    cb_instruction(Cpu.opcode(cpu), cpu, hw)
   end
   
   # 8 bit loads
