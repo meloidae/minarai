@@ -1,12 +1,13 @@
 defmodule Gameboy.Cpu.Execute do
   use Bitwise
-  alias Gameboy.Cpu
+  # alias Gameboy.Cpu
+  alias Gameboy.RecordCpu, as: Cpu
   alias Gameboy.Hardware
   alias Gameboy.Interrupts
   alias Gameboy.Utils
 
   # 8 bit load
-  def ld(%Cpu{} = cpu, hw, dst, src) do
+  def ld(cpu, hw, dst, src) do
     {value, cpu, hw} = Cpu.read(cpu, src, hw)
     Cpu.write(cpu, dst, hw, value)
   end
@@ -21,23 +22,25 @@ defmodule Gameboy.Cpu.Execute do
   # 16 bit loads
   # LD rr, nn
   # 12 cycles
-  def ld16_rr_nn(%Cpu{} = cpu, hw, reg16) do
+  def ld16_rr_nn(cpu, hw, reg16) do
     {value, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     {Cpu.write_register(cpu, reg16, value), hw}
   end
 
   # LD SP, HL
   # 8 cycles
-  def ld16_sp_hl(%Cpu{} = cpu, hw) do
+  def ld16_sp_hl(cpu, hw) do
     value = Cpu.read_register(cpu, :hl)
-    cpu = Map.put(cpu, :sp, value)
+    # cpu = Map.put(cpu, :sp, value)
+    cpu = Cpu.write_register(cpu, :sp, value)
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
   end
 
   # LDHL SP, n
   # 12 cycles
-  def ld16_hl_sp_n(%Cpu{} = cpu, hw) do
-    sp = cpu.sp
+  def ld16_hl_sp_n(cpu, hw) do
+    # sp = cpu.sp
+    sp = Cpu.read_register(cpu, :sp)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
     {value, carry, half_carry} = Cpu.add_u16_byte_carry(sp, offset)
     cpu = Cpu.write_register(cpu, :hl, value)
@@ -47,8 +50,9 @@ defmodule Gameboy.Cpu.Execute do
 
   # LD (nn), SP
   # 20 cycles
-  def ld16_nn_sp(%Cpu{} = cpu, hw) do
-    value = cpu.sp
+  def ld16_nn_sp(cpu, hw) do
+    # value = cpu.sp
+    value = Cpu.read_register(cpu, :sp)
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     hw = Hardware.synced_write(hw, addr, value &&& 0xff)
     {cpu, Hardware.synced_write(hw, (addr + 1) &&& 0xffff, (value >>> 8) &&& 0xff)}
@@ -56,7 +60,7 @@ defmodule Gameboy.Cpu.Execute do
 
   # PUSH rr
   # 16 cycles
-  def push16_rr(%Cpu{} = cpu, hw, reg16) do
+  def push16_rr(cpu, hw, reg16) do
     value = Cpu.read_register(cpu, reg16)
     hw = Hardware.sync_cycle(hw) # Add 4 extra cycles
     Cpu.push_u16(cpu, hw, value)
@@ -64,13 +68,13 @@ defmodule Gameboy.Cpu.Execute do
 
   # POP rr
   # 12 cycles
-  def pop16_rr(%Cpu{} = cpu, hw, reg16) do
+  def pop16_rr(cpu, hw, reg16) do
     {value, cpu, hw} = Cpu.pop_u16(cpu, hw)
     {Cpu.write_register(cpu, reg16, value), hw}
   end
 
   # Addtions
-  defp _add(%Cpu{} = cpu, hw, dst, src, add_fn) do
+  defp _add(cpu, hw, dst, src, add_fn) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {sum, carry, half_carry} = add_fn.(val1, val2, cpu)
@@ -79,13 +83,13 @@ defmodule Gameboy.Cpu.Execute do
     {cpu, hw}
   end
   # ADD dd, ss
-  def add(%Cpu{} = cpu, hw, dst, src), do: _add(cpu, hw, dst, src, &Cpu.add_u8_byte_carry/3)
+  def add(cpu, hw, dst, src), do: _add(cpu, hw, dst, src, &Cpu.add_u8_byte_carry/3)
   # ADC dd, ss
-  def adc(%Cpu{} = cpu, hw, dst, src), do: _add(cpu, hw, dst, src, &Cpu.adc_u8_byte_carry/3)
+  def adc(cpu, hw, dst, src), do: _add(cpu, hw, dst, src, &Cpu.adc_u8_byte_carry/3)
 
 
   # Subtractions
-  defp _sub(%Cpu{} = cpu, hw, dst, src, sub_fn) do
+  defp _sub(cpu, hw, dst, src, sub_fn) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = sub_fn.(val1, val2, cpu)
@@ -94,11 +98,11 @@ defmodule Gameboy.Cpu.Execute do
     {cpu, hw}
   end
   # SUB dd, ss
-  def sub(%Cpu{} = cpu, hw, dst, src), do: _sub(cpu, hw, dst, src, &Cpu.sub_u8_byte_carry/3)
-  def sbc(%Cpu{} = cpu, hw, dst, src), do: _sub(cpu, hw, dst, src, &Cpu.sbc_u8_byte_carry/3)
+  def sub(cpu, hw, dst, src), do: _sub(cpu, hw, dst, src, &Cpu.sub_u8_byte_carry/3)
+  def sbc(cpu, hw, dst, src), do: _sub(cpu, hw, dst, src, &Cpu.sbc_u8_byte_carry/3)
 
   # AND dd, ss
-  def and_op(%Cpu{} = cpu, hw, dst, src) do
+  def and_op(cpu, hw, dst, src) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = val1 &&& val2
@@ -108,7 +112,7 @@ defmodule Gameboy.Cpu.Execute do
   end
 
   # OR dd, ss
-  def or_op(%Cpu{} = cpu, hw, dst, src) do
+  def or_op(cpu, hw, dst, src) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = val1 ||| val2
@@ -118,7 +122,7 @@ defmodule Gameboy.Cpu.Execute do
   end
 
   # XOR dd, ss
-  def xor(%Cpu{} = cpu, hw, dst, src) do
+  def xor(cpu, hw, dst, src) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     result = bxor(val1, val2)
@@ -128,7 +132,7 @@ defmodule Gameboy.Cpu.Execute do
   end
 
   # CP dd, ss
-  def cp(%Cpu{} = cpu, hw, dst, src) do
+  def cp(cpu, hw, dst, src) do
     {val1, cpu, hw} = Cpu.read(cpu, dst, hw)
     {val2, cpu, hw} = Cpu.read(cpu, src, hw)
     {diff, carry, half_carry} = Cpu.sub_u8_byte_carry(val1, val2)
@@ -137,7 +141,7 @@ defmodule Gameboy.Cpu.Execute do
   end
 
   # INC d
-  def inc(%Cpu{} = cpu, hw, dst) do
+  def inc(cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {sum, _carry, half_carry} = Cpu.add_u8_byte_carry(value, 1)
     Cpu.set_flags(cpu, [z: sum == 0, n: false, h: half_carry])
@@ -145,7 +149,7 @@ defmodule Gameboy.Cpu.Execute do
   end
 
   # DEC d
-  def dec(%Cpu{} = cpu, hw, dst) do
+  def dec(cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {diff, _carry, half_carry} = Cpu.sub_u8_byte_carry(value, 1)
     Cpu.set_flags(cpu, [z: diff == 0, n: true, h: half_carry])
@@ -158,7 +162,7 @@ defmodule Gameboy.Cpu.Execute do
   # ADD HL, rr
   # 8 cycles
   # z flag is not affected
-  def add16_hl_rr(%Cpu{} = cpu, hw, reg16) do
+  def add16_hl_rr(cpu, hw, reg16) do
     hl = Cpu.read_register(cpu, :hl)
     val = Cpu.read_register(cpu, reg16)
     {sum, carry, half_carry} = Cpu.add_u16_word_carry(hl, val)
@@ -169,22 +173,20 @@ defmodule Gameboy.Cpu.Execute do
 
   # ADD SP, n
   # 16 cycles
-  def add16_sp_n(%Cpu{} = cpu, hw) do
+  def add16_sp_n(cpu, hw) do
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
-    sp = cpu.sp
+    # sp = cpu.sp
+    sp = Cpu.read_register(cpu, :sp)
     {sum, carry, half_carry} = Cpu.add_u16_byte_carry(sp, offset)
-    cpu = Map.put(cpu, :sp, sum)
-          |> Cpu.set_flag(:z, false)
-          |> Cpu.set_flag(:n, false)
-          |> Cpu.set_flag(:h, half_carry)
-          |> Cpu.set_flag(:c, carry)
+    cpu = Cpu.write_register(cpu, :sp, sum)
+          |> Cpu.set_all_flags(false, false, half_carry, carry)
     # Add 8 extra cycles
     {cpu, Hardware.sync_cycle(hw) |> Hardware.sync_cycle()}
   end
 
   # INC rr
   # 8 cycles
-  def inc16_rr(%Cpu{} = cpu, hw, reg16) do
+  def inc16_rr(cpu, hw, reg16) do
     value = Cpu.read_register(cpu, reg16)
     cpu = Cpu.write_register(cpu, reg16, (value + 1) &&& 0xffff)
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
@@ -192,7 +194,7 @@ defmodule Gameboy.Cpu.Execute do
 
   # DEC rr
   # 8 cycles
-  def dec16_rr(%Cpu{} = cpu, hw, reg16) do
+  def dec16_rr(cpu, hw, reg16) do
     value = Cpu.read_register(cpu, reg16)
     cpu = Cpu.write_register(cpu, reg16, (value - 1) &&& 0xffff)
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
@@ -203,7 +205,7 @@ defmodule Gameboy.Cpu.Execute do
   # SWAP dd
   # dd is either 8-bit register or address in HL
   # Swaps lower bit higher bit of dst
-  def swap(%Cpu{} = cpu, hw, dst) do
+  def swap(cpu, hw, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = ((value &&& 0x0f) <<< 4) ||| ((value &&& 0xf0) >>> 4)
     Cpu.set_all_flags(cpu, value == 0, false, false, false)
@@ -213,8 +215,9 @@ defmodule Gameboy.Cpu.Execute do
   # DAA
   # 4 cycles
   # decimal adjust register A
-  def daa(%Cpu{} = cpu, hw) do
-    a = cpu.a
+  def daa(cpu, hw) do
+    # a = cpu.a
+    a = Cpu.read_register(cpu, :a)
     c = Cpu.flag(cpu, :c)
     h = Cpu.flag(cpu, :h)
     {carry, a} = if !Cpu.flag(cpu, :n) do # After add/adc
@@ -233,19 +236,18 @@ defmodule Gameboy.Cpu.Execute do
           {false, a}
       end
     end
-    cpu = Map.put(cpu, :a, a)
-    |> Cpu.set_flag(:z, a == 0)
-    |> Cpu.set_flag(:h, false)
-    |> Cpu.set_flag(:c, carry)
+    cpu = Cpu.write_register(cpu, :a, a)
+          |> Cpu.set_flags([z: a == 0, h: false, c: carry])
     {cpu, hw}
   end
 
   # CPL
   # 4 cycles
   # Take complement (flip bits of) A register
-  def cpl(%Cpu{} = cpu, hw) do
-    a = cpu.a
-    cpu = Map.put(cpu, :a, ~~~a &&& 0xff)
+  def cpl(cpu, hw) do
+    # a = cpu.a
+    a = Cpu.read_register(cpu, :a)
+    cpu = Cpu.write_register(cpu, :a, ~~~a &&& 0xff)
           |> Cpu.set_flags([n: true, h: true])
     {cpu, hw}
   end
@@ -253,7 +255,7 @@ defmodule Gameboy.Cpu.Execute do
   # CCF
   # 4 cycles
   # Complement a carry flag
-  def ccf(%Cpu{} = cpu, hw) do
+  def ccf(cpu, hw) do
     carry = Cpu.flag(cpu, :c)
     cpu = Cpu.set_flags(cpu, [c: !carry, n: false, h: false])
     {cpu, hw}
@@ -262,7 +264,7 @@ defmodule Gameboy.Cpu.Execute do
   # SCF
   # 4 cycles
   # Set a carry flag
-  def scf(%Cpu{} = cpu, hw) do
+  def scf(cpu, hw) do
     cpu = Cpu.set_flags(cpu, [c: true, n: false, h: false])
     {cpu, hw}
   end
@@ -278,41 +280,41 @@ defmodule Gameboy.Cpu.Execute do
   # 4 cycles
   # TODO
   # Enter halt state unless it's a halt bug
-  def halt(%Cpu{} = cpu, hw) do
+  def halt(cpu, hw) do
     cond do
-      cpu.ime ->
-        {Map.put(cpu, :state, :halt), hw}
+      Cpu.ime(cpu) ->
+        {Cpu.set_state(cpu, :halt), hw}
       is_nil(Interrupts.check(hw.intr)) ->
-        {Map.put(cpu, :state, :halt), hw}
+        {Cpu.set_state(cpu, :halt), hw}
       true ->
-        {Map.put(cpu, :state, :haltbug), hw}
+        {Cpu.set_state(cpu, :haltbug), hw}
     end
   end
 
   # STOP
   # 4 cycles
   # raise error fo now
-  def stop(%Cpu{} = cpu, hw) do
+  def stop(cpu, hw) do
     {cpu, hw}
   end
 
   # DI
   # 4 cycles
   # Disable interrupt immediately (unlike how ei is delayed)
-  def di(%Cpu{} = cpu, hw) do
+  def di(cpu, hw) do
     # IO.puts("di")
-    {Map.put(cpu, :ime, false), hw}
+    {Cpu.set_ime(cpu, false), hw}
   end
 
   # EI
   # 4 cycles
   # Enable interrupt (but is delayed)
-  def ei(%Cpu{} = cpu, hw) do
-    {Map.put(cpu, :delayed_set_ime, true), hw}
+  def ei(cpu, hw) do
+    {Cpu.set_delayed_ime(cpu, true), hw}
   end
 
   # Rotation/Shifts
-  def _shift(%Cpu{} = cpu, hw, dst, shift_fn) do
+  def _shift(cpu, hw, dst, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     {value, carry} = shift_fn.(value, cpu)
     Cpu.set_all_flags(cpu, value == 0, false, false, carry)
@@ -321,34 +323,34 @@ defmodule Gameboy.Cpu.Execute do
   # RLC dd
   # 2-byte opcode (+ 4 cycles) unless it's RLCA (1-byte opcode)
   # rotate left
-  def rlc(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rlc_u8_byte_carry/2)
+  def rlc(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rlc_u8_byte_carry/2)
   # RL dd
   # 2-byte opcode (+ 4 cycles), unless RLA
   # rotate left through carry
-  def rl(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rl_u8_byte_carry/2)
+  def rl(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rl_u8_byte_carry/2)
   # RRC dd
   # 2-byte opcode (+ 4 cycles), unless it's RRCA (1-byte opcode)
   # rorate right
-  def rrc(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rrc_u8_byte_carry/2)
+  def rrc(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rrc_u8_byte_carry/2)
   # RR dd
   # 2-byte opcode (+ 4 cycles), unless it's RRCA (1-byte opcode)
   # rorate right through carry
-  def rr(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rr_u8_byte_carry/2)
+  def rr(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.rr_u8_byte_carry/2)
   # SLA dd
   # 2-byte opcode (+ 4 cycles)
   # shift left
-  def sla(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.sla_u8_byte_carry/2)
+  def sla(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.sla_u8_byte_carry/2)
   # SRA dd
   # 2-byte opcode (+ 4 cycles)
   # shift right, msb doesn't change
-  def sra(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.sra_u8_byte_carry/2)
+  def sra(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.sra_u8_byte_carry/2)
   # SRL dd
   # 2-byte opcode (+ 4 cycles)
   # shift right, msb is set to 0
-  def srl(%Cpu{} = cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.srl_u8_byte_carry/2)
+  def srl(cpu, hw, dst), do: _shift(cpu, hw, dst, &Cpu.srl_u8_byte_carry/2)
 
   # Special shifts RLCA, RLA, RRCA and RRA always resets Z flag
-  def _shift_a(%Cpu{} = cpu, hw, shift_fn) do
+  def _shift_a(cpu, hw, shift_fn) do
     {value, cpu, hw} = Cpu.read(cpu, :a, hw)
     {value, carry} = shift_fn.(value, cpu)
     Cpu.set_all_flags(cpu, false, false, false, carry)
@@ -356,16 +358,16 @@ defmodule Gameboy.Cpu.Execute do
   end
   # RLCA
   # rotate left
-  def rlca(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rlc_u8_byte_carry/2)
+  def rlca(cpu, hw), do: _shift_a(cpu, hw, &Cpu.rlc_u8_byte_carry/2)
   # RLA
   # rotate left through carry
-  def rla(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rl_u8_byte_carry/2)
+  def rla(cpu, hw), do: _shift_a(cpu, hw, &Cpu.rl_u8_byte_carry/2)
   # RRCA
   # rorate right
-  def rrca(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rrc_u8_byte_carry/2)
+  def rrca(cpu, hw), do: _shift_a(cpu, hw, &Cpu.rrc_u8_byte_carry/2)
   # RRA
   # rorate right through carry
-  def rra(%Cpu{} = cpu, hw), do: _shift_a(cpu, hw, &Cpu.rr_u8_byte_carry/2)
+  def rra(cpu, hw), do: _shift_a(cpu, hw, &Cpu.rr_u8_byte_carry/2)
 
 
   # Bit instructions
@@ -373,7 +375,7 @@ defmodule Gameboy.Cpu.Execute do
   # BIT b, dd
   # 2-byte opcode (+ 4 cycles)
   # Test bit b of dst
-  def bit(%Cpu{} = cpu, hw, bit, dst) do
+  def bit(cpu, hw, bit, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = value &&& (0x1 <<< bit)
     cpu = Cpu.set_flags(cpu, [z: value == 0, n: false, h: true])
@@ -382,7 +384,7 @@ defmodule Gameboy.Cpu.Execute do
   # SET b, dd
   # 2-byte opcode (+ 4 cycles)
   # Set bit b of dst, flags are unaffected
-  def set(%Cpu{} = cpu, hw, bit, dst) do
+  def set(cpu, hw, bit, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = value ||| (0x1 <<< bit)
     Cpu.write(cpu, dst, hw, value)
@@ -390,7 +392,7 @@ defmodule Gameboy.Cpu.Execute do
   # RES b, dd
   # 2-byte opcode (+ 4 cycles)
   # Reset bit b of dst, flags are unaffected
-  def res(%Cpu{} = cpu, hw, bit, dst) do
+  def res(cpu, hw, bit, dst) do
     {value, cpu, hw} = Cpu.read(cpu, dst, hw)
     value = value &&& ~~~(0x1 <<< bit)
     Cpu.write(cpu, dst, hw, value)
@@ -401,24 +403,24 @@ defmodule Gameboy.Cpu.Execute do
   # JP nn
   # 16 cycles
   # jump using immediate u16 value
-  def jp_nn(%Cpu{} = cpu, hw) do
+  def jp_nn(cpu, hw) do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
-    cpu = Map.put(cpu, :pc, addr)
+    cpu = Cpu.write_register(cpu, :pc, addr)
     {cpu, Hardware.sync_cycle(hw)}
   end
   # JP hl
   # 4 cycles
   # jump to address stored in HL register
-  def jp_hl(%Cpu{} = cpu, hw) do
+  def jp_hl(cpu, hw) do
     addr = Cpu.read_register(cpu, :hl)
-    {Map.put(cpu, :pc, addr), hw}
+    {Cpu.write_register(cpu, :pc, addr), hw}
   end
   # JP cc, nn
   # jump if condition is met (16 cycles), otherwise do nothing (12 cycles)
-  def jp_cc_nn(%Cpu{} = cpu, hw, cc) do
+  def jp_cc_nn(cpu, hw, cc) do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     if Cpu.check_condition(cpu, cc) do
-      cpu = Map.put(cpu, :pc, addr)
+      cpu = Cpu.write_register(cpu, :pc, addr)
       {cpu, Hardware.sync_cycle(hw)} # 4 extra cycles
     else
       {cpu, hw}
@@ -432,28 +434,29 @@ defmodule Gameboy.Cpu.Execute do
   # JR n
   # 12 cycles
   # Add i8 immediate value to current pc and jump
-  def jr_n(%Cpu{} = cpu, hw) do
+  def jr_n(cpu, hw) do
     # fetch immediate value first (increments pc)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
     # IO.puts("jr +0x#{offset}")
-    # addr = Cpu.read_register(cpu, :pc)
-    addr = cpu.pc
+    # addr = cpu.pc
+    addr = Cpu.read_register(cpu, :pc)
     # offset = if msb != 0, do: (~~~offset + 1) &&& 0xffff, else: offset
     offset = elem(@signed_table, offset)
-    cpu = Map.put(cpu, :pc, (addr + offset) &&& 0xffff)
+    cpu = Cpu.write_register(cpu, :pc, (addr + offset) &&& 0xffff)
     {cpu, Hardware.sync_cycle(hw)}
   end
   # JR cc, n
   # 12 cycles if condiiton is met, otherwise 8 cycels
-  def jr_cc_n(%Cpu{} = cpu, hw, cc) do
+  def jr_cc_n(cpu, hw, cc) do
     # fetch immediate value first (increments pc)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
-    addr = cpu.pc
+    # addr = cpu.pc
+    addr = Cpu.read_register(cpu, :pc)
     if Cpu.check_condition(cpu, cc) do
       # msb = offset &&& 0x80
       # offset = if msb != 0, do: offset ||| 0xff00, else: offset
       offset = elem(@signed_table, offset)
-      cpu = Map.put(cpu, :pc, (addr + offset) &&& 0xffff)
+      cpu = Cpu.write_register(cpu, :pc, (addr + offset) &&& 0xffff)
       {cpu, Hardware.sync_cycle(hw)} # 4 extra cycles
     else
       {cpu, hw}
@@ -465,20 +468,22 @@ defmodule Gameboy.Cpu.Execute do
   # CALL nn
   # 24 cycles
   # push addresss of next instruction onto stack and jump to u16 immediate address value
-  def call_nn(%Cpu{} = cpu, hw) do
+  def call_nn(cpu, hw) do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     hw = Hardware.sync_cycle(hw) # 4 extra cycles
-    {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
-    {Map.put(cpu, :pc, addr), hw}
+    # {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
+    {cpu, hw} = Cpu.push_u16(cpu, hw, Cpu.read_register(cpu, :pc))
+    {Cpu.write_register(cpu, :pc, addr), hw}
   end
   # CALL cc, nn
   # 24 cycles if condition is met, otherwise 12 cycles
-  def call_cc_nn(%Cpu{} = cpu, hw, cc) do
+  def call_cc_nn(cpu, hw, cc) do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     if Cpu.check_condition(cpu, cc) do
       hw = Hardware.sync_cycle(hw) # 4 extra cycles
-      {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
-      {Map.put(cpu, :pc, addr), hw}
+      # {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
+      {cpu, hw} = Cpu.push_u16(cpu, hw, Cpu.read_register(cpu, :pc))
+      {Cpu.write_register(cpu, :pc, addr), hw}
     else
       {cpu, hw}
     end
@@ -488,9 +493,10 @@ defmodule Gameboy.Cpu.Execute do
   # RST n
   # 16 cycles
   # Push current address onto stack, then jump to address n
-  def rst(%Cpu{} = cpu, hw, n) do
-    {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
-    cpu = Map.put(cpu, :pc, n &&& 0xffff)
+  def rst(cpu, hw, n) do
+    # {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
+    {cpu, hw} = Cpu.push_u16(cpu, hw, Cpu.read_register(cpu, :pc))
+    cpu = Cpu.write_register(cpu, :pc, n &&& 0xffff)
     {cpu, Hardware.sync_cycle(hw)}
   end
 
@@ -498,18 +504,18 @@ defmodule Gameboy.Cpu.Execute do
   # RET
   # 16 cycles
   # pop two bytes from stack and jump to that address
-  def ret(%Cpu{} = cpu, hw) do
+  def ret(cpu, hw) do
     {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
-    cpu = Map.put(cpu, :pc, addr)
+    cpu = Cpu.write_register(cpu, :pc, addr)
     {cpu, Hardware.sync_cycle(hw)}
   end
   # RET cc
   # 20 cycls when condition is met, otherwise 8 cycles
-  def ret_cc(%Cpu{} = cpu, hw, cc) do
+  def ret_cc(cpu, hw, cc) do
     hw = Hardware.sync_cycle(hw)
     if Cpu.check_condition(cpu, cc) do
       {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
-      cpu = Map.put(cpu, :pc, addr)
+      cpu = Cpu.write_register(cpu, :pc, addr)
       {cpu, Hardware.sync_cycle(hw)}
     else
       {cpu, hw}
@@ -518,12 +524,11 @@ defmodule Gameboy.Cpu.Execute do
   # RETI
   # 16 cycles
   # Do return and enable interrupts right away (not delayed like EI)
-  def reti(%Cpu{} = cpu, hw) do
+  def reti(cpu, hw) do
     # cpu = Map.put(cpu, :ime, true)
     {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
     # cpu = Map.put(cpu, :pc, addr)
-    cpu = %{cpu | pc: addr, ime: true}
-    {cpu, Hardware.sync_cycle(hw)}
+    {Cpu.return_from_interrupt(cpu, addr), Hardware.sync_cycle(hw)}
   end
 
   def undefined(_cpu, _hw, opcode) do
