@@ -3,6 +3,7 @@ defmodule Gameboy.Memory do
 
   defstruct data: <<0x00::size(0x1)-unit(8)>>, size: 0x01
 
+  def init(size, _name), do: init(size)
   def init(mem_size) do
     %Memory{data: <<0x00::size(mem_size)-unit(8)>>, size: mem_size}
   end

@@ -2,6 +2,7 @@ defmodule Gameboy.AtomicsMemory do
   use Bitwise
   alias AtomicsMemory
 
+  def init(size, _name), do: init(size)
   def init(size) do
     :atomics.new(size, [signed: false])
   end

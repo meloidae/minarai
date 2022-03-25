@@ -1,12 +1,25 @@
 defmodule Gameboy.EtsMemory do
   use Bitwise
 
-  def init(name, size) do
-    handle = :ets.new(name, [:set, :private])
+  def init(size, name) do
+    handle = :ets.new(name, [:set, :public, :named_table])
     # Initialize contents of ets
     0..size - 1
     |> Enum.each(fn i -> :ets.insert(handle, {i, 0}) end)
     handle
+  end
+
+  def init_array(block_size, num_blocks, name) do
+    IO.puts("init_array(): name=#{name}, bank=#{num_blocks}, bank_size=#{block_size}")
+    handle = :ets.new(name, [:set, :public, :named_table])
+    _init_array(block_size, handle, num_blocks)
+  end
+
+  def _init_array(_block_size, handle, 0), do: handle
+  def _init_array(block_size, handle, i) do
+    0..block_size - 1
+    |> Enum.each(fn j -> :ets.insert(handle, {{i - 1, j}, 0}) end)
+    _init_array(block_size, handle, i - 1)
   end
 
   def read(handle, addr) do
@@ -26,7 +39,19 @@ defmodule Gameboy.EtsMemory do
     (high <<< 8) ||| low
   end
 
-  def write(handle, addr, value), do: :ets.insert(handle, {addr, value})
+  def read_array(handle, bank, addr) do
+    :ets.lookup_element(handle, {bank, addr}, 2)
+  end
+
+  def write(handle, addr, value) do
+    # IO.puts("write(): name=#{handle}, addr=#{addr}, value=#{value}")
+    :ets.insert(handle, {addr, value})
+  end
+
+  def write_array(handle, bank, addr, value) do
+    # IO.puts("write_array(): name=#{handle}, bank=#{bank}, addr=#{addr}, value=#{value}")
+    :ets.insert(handle, {{bank, addr}, value})
+  end
 
   defp ets2list(handle, first, first, acc) do
     value = :ets.lookup_element(handle, first, 2)

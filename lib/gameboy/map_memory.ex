@@ -2,6 +2,7 @@ defmodule Gameboy.MapMemory do
   use Bitwise
   alias Gameboy.MapMemory
 
+  def init(size, _name), do: init(size)
   def init(size) do
     0..size - 1
     |> Enum.reduce(%{}, fn i, acc -> Map.put(acc, i, 0) end)
