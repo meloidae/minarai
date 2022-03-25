@@ -284,7 +284,7 @@ defmodule Gameboy.Cpu.Execute do
     cond do
       Cpu.ime(cpu) ->
         {Cpu.set_state(cpu, :halt), hw}
-      is_nil(Interrupts.check(hw.intr)) ->
+      is_nil(Hardware.check_interrupt(hw)) ->
         {Cpu.set_state(cpu, :halt), hw}
       true ->
         {Cpu.set_state(cpu, :haltbug), hw}
