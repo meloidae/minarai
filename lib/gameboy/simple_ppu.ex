@@ -2,11 +2,10 @@ defmodule Gameboy.SimplePpu do
   use Bitwise
   alias Gameboy.Memory
   # alias Gameboy.MapMemory
-  alias Gameboy.EtsMemory
-  # alias Gameboy.AtomicsMemory
+  alias Gameboy.EtsMemory, as: RWMemory
+  # alias Gameboy.AtomicsMemory, as: RWMemory
   alias Gameboy.SimplePpu, as: Ppu
   alias Gameboy.Interrupts
-  alias Gameboy.Utils
 
   @vram_size 0x4000
   @oam_size 0xa0
@@ -33,7 +32,8 @@ defmodule Gameboy.SimplePpu do
             bgp: 0x00,
             obp0: 0x00,
             obp1: 0x00,
-            buffer: []
+            buffer: [],
+            scanline_args: nil
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
@@ -54,12 +54,22 @@ defmodule Gameboy.SimplePpu do
   @obj_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 1)) != 0 end) |> List.to_tuple()
   @bg_win_enable 0..0xff |> Enum.map(fn x -> (x &&& 1) != 0 end) |> List.to_tuple()
 
+  @screen_height 144
+  @n_scanline_args 9  # Accounts for lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1
+
   def init do
     # vram = Memory.init(@vram_size)
     # vram = MapMemory.init(@vram_size)
-    vram = EtsMemory.init(:vram, @vram_size)
+    vram = RWMemory.init(@vram_size, :vram)
     oam = Memory.init(@oam_size)
-    %Ppu{vram: vram, oam: oam}
+    args = init_scanline_args()
+    # :persistent_term.put(:scanline_args, args)
+    # :persistent_term.put(:vram, vram)
+    %Ppu{vram: vram, oam: oam, scanline_args: args}
+  end
+
+  def init_scanline_args do
+    :atomics.new(@screen_height * @n_scanline_args,  [signed: false])
   end
 
   def read_oam(%Ppu{mode: mode, oam: oam} = _ppu, addr) do
@@ -91,14 +101,14 @@ defmodule Gameboy.SimplePpu do
     else
       # Memory.read(vram, addr &&& @vram_mask)
       # MapMemory.read(vram, addr &&& @vram_mask)
-      EtsMemory.read(vram, addr &&& @vram_mask)
+      RWMemory.read(vram, addr &&& @vram_mask)
     end
   end
 
-  def read_binary_vram(%Ppu{vram: vram} = _ppu, addr, len) do
+  defp read_binary_vram(%Ppu{vram: vram} = _ppu, addr, len) do
     # Memory.read_binary(vram, addr &&& @vram_mask, len)
     # MapMemory.read_binary(vram, addr &&& @vram_mask, len)
-    EtsMemory.read_binary(vram, addr &&& @vram_mask, len)
+    RWMemory.read_binary(vram, addr &&& @vram_mask, len)
   end
 
   def write_vram(%Ppu{mode: mode, vram: vram} = ppu, addr, value) do
@@ -108,7 +118,7 @@ defmodule Gameboy.SimplePpu do
     else 
       # Map.put(ppu, :vram, Memory.write(vram, addr &&& @vram_mask, value))
       # Map.put(ppu, :vram, MapMemory.write(vram, addr &&& @vram_mask, value))
-      EtsMemory.write(vram, addr &&& @vram_mask, value)
+      RWMemory.write(vram, addr &&& @vram_mask, value)
       ppu
     end
   end
@@ -207,9 +217,10 @@ defmodule Gameboy.SimplePpu do
     {%{ppu | mode: :pixel_transfer, counter: @pixel_transfer_cycles}, 0}
   end
   defp do_cycle(%Ppu{counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer} = ppu) do
-    pixels = scanline(ppu)
+    pixels = draw_scanline(ppu)
     req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
-    {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [buffer | pixels]}, req}
+    # {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [buffer | pixels]}, req}
+    {%{ppu | mode: :hblank, counter: @hblank_cycles, buffer: [pixels | buffer]}, req}
   end
   defp do_cycle(%Ppu{counter: _, mode: :hblank, lcds: lcds, ly: ly, lyc: lyc} = ppu) do
     new_ly = ly + 1
@@ -217,8 +228,10 @@ defmodule Gameboy.SimplePpu do
       req = Interrupts.vblank()
       req = if elem(@vblank_stat, lcds), do: Interrupts.stat() ||| req, else: req
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
-      vblank(ppu)
-      {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
+      # vblank(ppu)
+      task = vblank_task(ppu)
+      # {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly}, req}
+      {%{ppu | mode: :vblank, counter: @vblank_cycles, ly: new_ly, buffer: task}, req}
     else
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
@@ -230,6 +243,8 @@ defmodule Gameboy.SimplePpu do
     if new_ly == 153 do
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
+      render(ppu)
+      # vblank_await_all(ppu)
       {%{ppu | mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []}, req}
     else
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat(), else: 0
@@ -360,7 +375,8 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
-  defp get_sprite_map(%Ppu{oam: %{data: oam_data}, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
+  defp get_sprite_map(oam_data, vram, lcdc, ly, obp0, obp1) do
+  # defp get_sprite_map(%Ppu{oam: %{data: oam_data}, vram: vram, lcdc: lcdc, ly: ly, obp0: obp0, obp1: obp1} = _ppu) do
     sprite_size = elem(@obj_size, lcdc)
     # Memory.read_binary(oam, 0, @oam_size)
     oam_data
@@ -390,11 +406,11 @@ defmodule Gameboy.SimplePpu do
       if elem(@flip_x, flags) do
         # elem(@tile_bytes_rev, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
         # elem(@tile_bytes_rev, MapMemory.read_short(vram, (tile_id * 16) + (line * 2)))
-        elem(@tile_bytes_rev, EtsMemory.read_short(vram, (tile_id * 16) + (line * 2)))
+        elem(@tile_bytes_rev, RWMemory.read_short(vram, (tile_id * 16) + (line * 2)))
       else
         # elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + (line * 2), 16))
         # elem(@tile_bytes, MapMemory.read_short(vram, (tile_id * 16) + (line * 2)))
-        elem(@tile_bytes, EtsMemory.read_short(vram, (tile_id * 16) + (line * 2)))
+        elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + (line * 2)))
       end
       |> reduce_with_index(0, acc, fn p, i, m ->
         if p === 0 do
@@ -407,6 +423,27 @@ defmodule Gameboy.SimplePpu do
     end)
   end
 
+  defp put_args(ref, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
+    offset = ly * @n_scanline_args + 1
+    :atomics.put(ref, offset, lcdc)
+    :atomics.put(ref, offset + 1, scy)
+    :atomics.put(ref, offset + 2, scx)
+    :atomics.put(ref, offset + 3, ly)
+    :atomics.put(ref, offset + 4, wy)
+    :atomics.put(ref, offset + 5, wx)
+    :atomics.put(ref, offset + 6, bgp)
+    :atomics.put(ref, offset + 7, obp0)
+    :atomics.put(ref, offset + 8, obp1)
+  end
+
+  defp draw_scanline(%Ppu{oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1, scanline_args: args} = _ppu) do
+    # scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+    put_args(args, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+    oam_data
+    # fn -> scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) end
+    # fn -> scanline_with_args(oam_data, ly) end
+    # Task.async(fn -> scanline_with_args(oam_data, ly) end)
+  end
   # defp draw_scanline(ppu) do
     # scanline(ppu)
     # MinaraiNif.scanline(ppu.vram.data,
@@ -432,14 +469,6 @@ defmodule Gameboy.SimplePpu do
     zip_map_iolist(t1, t2, [acc | map_fn.(h1, h2)], map_fn)
   end
 
-  # @x_coords 0..7
-  # |> Enum.map(fn x ->
-  #   start = -x
-  #   start..159
-  #   |> Enum.chunk_every(8)
-  # end)
-  # |> List.to_tuple()
-
   @tile_indexes 0..31
   |> Enum.map(fn start ->
     Enum.map(0..19, fn x ->
@@ -458,8 +487,29 @@ defmodule Gameboy.SimplePpu do
 
   @win_tile_indexes 0..20 |> Enum.to_list()
 
-  defp scanline(%Ppu{vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp} = ppu) do
-    sprites = if elem(@obj_enable, lcdc), do: get_sprite_map(ppu), else: %{}
+  defp scanline_with_args(oam_data, row, vram, ref) do
+    # vram = :vram
+    # vram = :persistent_term.get(:vram)
+    # ref = :persistent_term.get(:scanline_args)
+    offset = row * @n_scanline_args + 1
+    lcdc = :atomics.get(ref, offset)
+    scy = :atomics.get(ref, offset + 1)
+    scx = :atomics.get(ref, offset + 2)
+    ly = :atomics.get(ref, offset + 3)
+    wy = :atomics.get(ref, offset + 4)
+    wx = :atomics.get(ref, offset + 5)
+    bgp = :atomics.get(ref, offset + 6)
+    obp0 = :atomics.get(ref, offset + 7)
+    obp1 = :atomics.get(ref, offset + 8)
+    scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+  end
+
+  defp scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
+    sprites = if elem(@obj_enable, lcdc) do
+      get_sprite_map(oam_data, vram, lcdc, ly, obp0, obp1)
+    else
+      %{}
+    end
     n_sp = map_size(sprites)
 
     if elem(@bg_win_enable, lcdc) do
@@ -471,15 +521,11 @@ defmodule Gameboy.SimplePpu do
 
       bg_tile_fn = if elem(@tile_data_addr, lcdc) do
         # 0x8000 address mode
-        # fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + bg_tile_line, 16)) end
-        # fn tile_id -> elem(@tile_bytes, MapMemory.read_short(vram, (tile_id * 16) + bg_tile_line)) end
-        fn tile_id -> elem(@tile_bytes, EtsMemory.read_short(vram, (tile_id * 16) + bg_tile_line)) end
+        fn tile_id -> elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + bg_tile_line)) end
       else
         # 0x8800 address mode
         fn tile_id ->
-          # elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line, 16))
-          # elem(@tile_bytes, MapMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line))
-          elem(@tile_bytes, EtsMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line))
+          elem(@tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line))
         end
       end
 
@@ -489,9 +535,7 @@ defmodule Gameboy.SimplePpu do
         elem(@tile_indexes_extra, bg_tile_index)
       end
 
-      # bg_row = Memory.read_range(vram, bg_row_addr, 32)
-      # bg_row = MapMemory.read_range(vram, bg_row_addr, 32)
-      bg_row = EtsMemory.read_range(vram, bg_row_addr, 32)
+      bg_row = RWMemory.read_range(vram, bg_row_addr, 32)
                |> List.to_tuple()
       
       if elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166 do
@@ -499,21 +543,15 @@ defmodule Gameboy.SimplePpu do
         win_x = wx - 7
         win_row_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
         win_tile_line = rem(win_y, 8) * 2
-        # win_row = Memory.read_range(vram, win_row_addr, 32)
-        # win_row = MapMemory.read_range(vram, win_row_addr, 32)
-        win_row = EtsMemory.read_range(vram, win_row_addr, 32)
+        win_row = RWMemory.read_range(vram, win_row_addr, 32)
                   |> List.to_tuple()
         win_tile_fn = if elem(@tile_data_addr, lcdc) do
           # 0x8000 address mode
-          # fn tile_id -> elem(@tile_bytes, Memory.read_int(vram, (tile_id * 16) + win_tile_line, 16)) end
-          # fn tile_id -> elem(@tile_bytes, MapMemory.read_short(vram, (tile_id * 16) + win_tile_line)) end
-          fn tile_id -> elem(@tile_bytes, EtsMemory.read_short(vram, (tile_id * 16) + win_tile_line)) end
+          fn tile_id -> elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + win_tile_line)) end
         else
           # 0x8800 address mode
           fn tile_id ->
-            # elem(@tile_bytes, Memory.read_int(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line, 16))
-            # elem(@tile_bytes, MapMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line))
-            elem(@tile_bytes, EtsMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line))
+            elem(@tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line))
           end
         end
         win_indexes = @win_tile_indexes
@@ -547,7 +585,7 @@ defmodule Gameboy.SimplePpu do
     # Start rendering windows
     [h_win | rest_win] = win_indexes
     win_tile = win_tile_fn.(elem(win_row, h_win)) 
-    if win_x === 0, do: win_tile, else: Enum.drop(win_tile, -win_x)
+    win_tile = if win_x === 0, do: win_tile, else: Enum.drop(win_tile, -win_x)
     _mix(x, win_tile, rest_win, win_row, win_tile_fn, sprites, n_sp, bgp, pixels)
   end
   defp _mix_pre_win(x, win_x, [] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) do
@@ -641,8 +679,43 @@ defmodule Gameboy.SimplePpu do
     end
   end
 
-  defp vblank(ppu) do
-    data = ppu.buffer |> IO.iodata_to_binary()
+  defp map_rev([], acc, _), do: acc
+  defp map_rev([h | t], acc, map_fn) do
+    map_rev(t, [map_fn.(h) | acc], map_fn)
+  end
+
+  # defp map_rev_decr(<<>>, acc, _n, _), do: acc
+  defp map_rev_decr([], acc, _n, _), do: acc
+  # defp map_rev_decr(<<h::binary-size(160), t::binary>>, acc, n, map_fn) do
+  defp map_rev_decr([h | t], acc, n, map_fn) do
+    map_rev_decr(t, [map_fn.(h, n) | acc], n - 1, map_fn)
+  end
+
+  defp vblank(%Ppu{buffer: buffer}) do
+    data = buffer |> IO.iodata_to_binary()
     send(Minarai, {:update, data})
   end
+
+  # defp vblank_task(%Ppu{buffer: buffer}) do
+  defp vblank_task(%Ppu{buffer: buffer, vram: vram, scanline_args: args}) do
+    # oam_data = buffer |> IO.iodata_to_binary()
+    Task.async(fn ->
+      # data = map_rev(buffer, [], fn x -> x.() end) |> IO.iodata_to_binary()
+      data = map_rev_decr(buffer, [], 143, fn oam, row -> scanline_with_args(oam, row, vram , args) end) |> IO.iodata_to_binary()
+      send(Minarai, {:update, data})
+      # IO.puts("buffer size: #{buffer |> :erlang.term_to_binary() |> :erlang.byte_size()}")
+    end)
+  end
+
+  defp vblank_await_all(%Ppu{buffer: buffer}) do
+    data = Task.await_many(buffer) |> IO.iodata_to_binary()
+    send(Minarai, {:update, data})
+  end
+
+  defp render(%Ppu{buffer: buffer}), do: Task.await(buffer)
+  # defp render(%Ppu{buffer: buffer}) do
+  #   data = Task.await_many(buffer) |> IO.iodata_to_binary()
+  #   send(Minarai, {:update, data})
+  # end
+
 end
