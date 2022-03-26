@@ -3,7 +3,8 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Hardware
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
-  alias Gameboy.SimplePpu, as: Ppu
+  # alias Gameboy.SimplePpu, as: Ppu
+  alias Gameboy.RecordPpu, as: Ppu
   alias Gameboy.Wram
   alias Gameboy.Hram
   alias Gameboy.Apu
@@ -124,6 +125,27 @@ defmodule Gameboy.Hardware do
     intr = Interrupts.acknowledge(intr, intr_mask)
     hardware(hw, intr: intr)
   end
+
+  def get_counter(hardware(counter: counter) = _hw), do: counter
+  def set_counter(hw, counter) do
+    hardware(hw, counter: counter)
+  end
+
+  def get_cart(hardware(cart: cart) = _hw), do: cart
+  def get_bootrom(hardware(bootrom: bootrom) = _hw), do: bootrom
+
+  # def prepare_for_copy(hardware(bootrom: {_memory, enable}, cart: cart) = hw) do
+  #   # Remove references to large tuples
+  #   bootrom = {nil, enable}
+  #   cart = %{cart | rom: nil}
+  #   hardware(hw, bootrom: bootrom, cart: cart)
+  # end
+
+  # def recover_rom(hardware(bootrom: {_memory, enable}, cart: cart) = hw) do
+  #   cartrom = :persistent_term.get({Minarai, :cartrom})
+  #   bootrom_data = :persistent_term.get({Minarai, :bootrom})
+  #   hardware(hw, cart: %{cart | rom: cartrom}, bootrom: {bootrom_data, enable})
+  # end
 
   # defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
   defp _read(hardware(bootrom: {_, true} = bootrom) = hw, addr, 0x00) do
