@@ -4,10 +4,12 @@ defmodule Gameboy.Cartridge do
   alias Gameboy.Memory
   alias Gameboy.Utils
   alias Gameboy.TupleMemory
+  alias Gameboy.EtsMemory
+  alias Gameboy.PtMemory
 
   defstruct mbc: :nombc,
-            rom: %{memory: struct(Memory), offset: 0x4000},
-            ram: %{memory: struct(Memory), offset: 0x0}
+            rom: nil,
+            ram: nil
 
   # @path "roms/Upwell.gb"
   # @path "roms/flappyboy.gb"
@@ -67,6 +69,8 @@ defmodule Gameboy.Cartridge do
     ram = init_ram(mbc, memory)
     IO.puts("Cartridge mbc: #{inspect(mbc)}")
     IO.puts("ROM banks: #{div(tuple_size(rom), @bank_size)}")
+    # IO.puts("ROM banks: #{div(tuple_size(:persistent_term.get(rom)), @bank_size)}")
+    # IO.puts("RAM banks: #{if ram == nil, do: "nil", else: map_size(ram)}")
     %Cartridge{mbc: mbc, rom: rom, ram: ram}
   end
 
@@ -87,15 +91,15 @@ defmodule Gameboy.Cartridge do
         # %{memory: Memory.init_memory_array(0x2000, 1), is_enabled: true}
         nil
       0x01 -> # 2kb ram
-        %{memory: Memory.init_memory_array(0x0800, 1)}
+        EtsMemory.init_array(0x0800, 1, :cartram)
       0x02 ->
-        %{memory: Memory.init_memory_array(@bank_size, 1)}
+        EtsMemory.init_array(@bank_size, 1, :cartram)
       0x03 ->
-        %{memory: Memory.init_memory_array(@bank_size, 4)}
+        EtsMemory.init_array(@bank_size, 4, :cartram)
       0x04 ->
-        %{memory: Memory.init_memory_array(@bank_size, 16)}
+        EtsMemory.init_array(@bank_size, 16, :cartram)
       0x05 ->
-        %{memory: Memory.init_memory_array(@bank_size, 8)}
+        EtsMemory.init_array(@bank_size, 8, :cartram)
     end
   end
 
@@ -148,11 +152,11 @@ defmodule Gameboy.Cartridge do
   end
 
   def read_ram(%{mbc: %{type: :nombc}, ram: ram}, addr) do
-    Memory.read_array(ram.memory, 0x0, addr &&& @bank_mask)
+    EtsMemory.read_array(ram, 0x0, addr &&& @bank_mask)
   end
   # MBC1
   def read_ram(%{mbc: %{type: :mbc1, ram: bank}, ram: ram}, addr) do
-    Memory.read_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1))
+    EtsMemory.read_array(ram, bank, addr &&& @bank_mask)
   end
   # MBC3
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x08, rtc_s: value}}, _addr), do: value
@@ -161,17 +165,21 @@ defmodule Gameboy.Cartridge do
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0b, rtc_dl: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0c, rtc_dh: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: bank}, ram: ram}, addr) do
-    Memory.read_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1))
+    EtsMemory.read_array(ram, bank, addr &&& @bank_mask)
   end
 
   def write_ram(%{mbc: %{type: :nombc}, ram: ram} = cart, addr, value) do
     # How to enable write with no mbc?
-    put_in(cart.ram.memory, Memory.write_array(ram.memory, 0x0, addr &&& @bank_mask, value))
+    # put_in(cart.ram.memory, Memory.write_array(ram.memory, 0x0, addr &&& @bank_mask, value))
+    EtsMemory.write_array(ram, 0x0, addr &&& @bank_mask, value)
+    cart
   end
   # MBC1
   def write_ram(%{mbc: %{type: :mbc1, ram_enable: false}} = cart, _addr, _value), do: cart
   def write_ram(%{mbc: %{type: :mbc1, ram_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
-    put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
+    # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
+    EtsMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+    cart
   end
   # MBC3
   def write_ram(%{mbc: %{type: :mbc3, ram_rtc_enable: false}} = cart, _addr, _value), do: cart
@@ -191,7 +199,9 @@ defmodule Gameboy.Cartridge do
     put_in(cart.mbc.rtc_dh, value)
   end
   def write_ram(%{mbc: %{type: :mbc3, ram_rtc_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
-    put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
+    # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
+    EtsMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+    cart
   end
 
   def set_bank_control(%{mbc: %{type: :nombc}} = cart, _addr, _value), do: cart
