@@ -20,7 +20,7 @@ defmodule Gameboy.Utils do
   def stats_table, do: @stats_table
 
   def init_stats_table do
-    :ets.new(@stats_table, [:named_table])
+    :ets.new(@stats_table, [:named_table, :public])
     :ets.insert(@stats_table, {:counter, 0})
   end
 
@@ -78,7 +78,7 @@ defmodule Gameboy.Utils do
   def counter_table, do: @counter_table
 
   def init_counter_table do
-    :ets.new(@counter_table, [:named_table])
+    :ets.new(@counter_table, [:named_table, :public])
   end
 
   def update_counter(name) do
