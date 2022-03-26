@@ -51,10 +51,10 @@ defmodule Gameboy do
       0 ->
         gb
     end
-    if :persistent_term.get({Minarai, :print_count}, false) do
-      IO.puts("count: #{hw.counter}")
-      :persistent_term.put({Minarai, :print_count}, false)
-    end
+    # if :persistent_term.get({Minarai, :print_count}, false) do
+    #   IO.puts("count: #{hw.counter}")
+    #   :persistent_term.put({Minarai, :print_count}, false)
+    # end
     cpu_step(cpu, hw)
     # {cpu, hw} = handle_interrupt(cpu, hw)
     # %{pc: pc, state: state} = cpu
