@@ -72,7 +72,7 @@ defmodule Gameboy.RecordPpu do
   end
 
   def init_scanline_args do
-    :atomics.new(@screen_height * @n_scanline_args,  [signed: false])
+    :ets.new(:scanline_args, [:set, :public, :named_table])
   end
 
   def read_oam(ppu(mode: mode, oam: oam) = _p, addr, value) do
@@ -351,16 +351,7 @@ defmodule Gameboy.RecordPpu do
   end
 
   defp put_args(ref, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
-    offset = ly * @n_scanline_args + 1
-    :atomics.put(ref, offset, lcdc)
-    :atomics.put(ref, offset + 1, scy)
-    :atomics.put(ref, offset + 2, scx)
-    :atomics.put(ref, offset + 3, ly)
-    :atomics.put(ref, offset + 4, wy)
-    :atomics.put(ref, offset + 5, wx)
-    :atomics.put(ref, offset + 6, bgp)
-    :atomics.put(ref, offset + 7, obp0)
-    :atomics.put(ref, offset + 8, obp1)
+    :ets.insert(ref, {ly, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1})
   end
 
   defp draw_scanline(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1, scanline_args: args) = _p) do
@@ -387,16 +378,7 @@ defmodule Gameboy.RecordPpu do
   @win_tile_indexes 0..20 |> Enum.to_list()
 
   defp scanline_with_args(oam_data, row, vram, ref) do
-    offset = row * @n_scanline_args + 1
-    lcdc = :atomics.get(ref, offset)
-    scy = :atomics.get(ref, offset + 1)
-    scx = :atomics.get(ref, offset + 2)
-    ly = :atomics.get(ref, offset + 3)
-    wy = :atomics.get(ref, offset + 4)
-    wx = :atomics.get(ref, offset + 5)
-    bgp = :atomics.get(ref, offset + 6)
-    obp0 = :atomics.get(ref, offset + 7)
-    obp1 = :atomics.get(ref, offset + 8)
+    [{_, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
     scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
   end
 
