@@ -4,7 +4,7 @@ defmodule Gameboy.Cartridge do
   alias Gameboy.Memory
   alias Gameboy.Utils
   alias Gameboy.TupleMemory
-  alias Gameboy.EtsMemory
+  alias Gameboy.EtsMemory, as: RWMemory
   alias Gameboy.PtMemory
 
   defstruct mbc: :nombc,
@@ -91,15 +91,15 @@ defmodule Gameboy.Cartridge do
         # %{memory: Memory.init_memory_array(0x2000, 1), is_enabled: true}
         nil
       0x01 -> # 2kb ram
-        EtsMemory.init_array(0x0800, 1, :cartram)
+        RWMemory.init_array(0x0800, 1, :cartram)
       0x02 ->
-        EtsMemory.init_array(@bank_size, 1, :cartram)
+        RWMemory.init_array(@bank_size, 1, :cartram)
       0x03 ->
-        EtsMemory.init_array(@bank_size, 4, :cartram)
+        RWMemory.init_array(@bank_size, 4, :cartram)
       0x04 ->
-        EtsMemory.init_array(@bank_size, 16, :cartram)
+        RWMemory.init_array(@bank_size, 16, :cartram)
       0x05 ->
-        EtsMemory.init_array(@bank_size, 8, :cartram)
+        RWMemory.init_array(@bank_size, 8, :cartram)
     end
   end
 
@@ -152,11 +152,11 @@ defmodule Gameboy.Cartridge do
   end
 
   def read_ram(%{mbc: %{type: :nombc}, ram: ram}, addr) do
-    EtsMemory.read_array(ram, 0x0, addr &&& @bank_mask)
+    RWMemory.read_array(ram, 0x0, addr &&& @bank_mask)
   end
   # MBC1
   def read_ram(%{mbc: %{type: :mbc1, ram: bank}, ram: ram}, addr) do
-    EtsMemory.read_array(ram, bank, addr &&& @bank_mask)
+    RWMemory.read_array(ram, bank, addr &&& @bank_mask)
   end
   # MBC3
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x08, rtc_s: value}}, _addr), do: value
@@ -165,20 +165,20 @@ defmodule Gameboy.Cartridge do
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0b, rtc_dl: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: 0x0c, rtc_dh: value}}, _addr), do: value
   def read_ram(%{mbc: %{type: :mbc3, ram: bank}, ram: ram}, addr) do
-    EtsMemory.read_array(ram, bank, addr &&& @bank_mask)
+    RWMemory.read_array(ram, bank, addr &&& @bank_mask)
   end
 
   def write_ram(%{mbc: %{type: :nombc}, ram: ram} = cart, addr, value) do
     # How to enable write with no mbc?
     # put_in(cart.ram.memory, Memory.write_array(ram.memory, 0x0, addr &&& @bank_mask, value))
-    EtsMemory.write_array(ram, 0x0, addr &&& @bank_mask, value)
+    RWMemory.write_array(ram, 0x0, addr &&& @bank_mask, value)
     cart
   end
   # MBC1
   def write_ram(%{mbc: %{type: :mbc1, ram_enable: false}} = cart, _addr, _value), do: cart
   def write_ram(%{mbc: %{type: :mbc1, ram_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
     # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
-    EtsMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+    RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
     cart
   end
   # MBC3
@@ -200,7 +200,7 @@ defmodule Gameboy.Cartridge do
   end
   def write_ram(%{mbc: %{type: :mbc3, ram_rtc_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
     # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
-    EtsMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+    RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
     cart
   end
 
