@@ -221,7 +221,7 @@ defmodule Gameboy.Cartridge do
         put_in(cart.mbc.bank2, value &&& @mbc1_bank2_mask)
         |> mbc1_set_bank()
       true -> # Banking mode select
-        mode = if (value &&& @mbc1_mode_mask) != 0, do: :advance_rom_or_ram_bank, else: :simple_rom_bank
+        mode = if (value &&& @mbc1_mode_mask) != 0, do: :advanced_rom_or_ram_bank, else: :simple_rom_bank
         put_in(cart.mbc.mode, mode)
         |> mbc1_set_bank()
     end
