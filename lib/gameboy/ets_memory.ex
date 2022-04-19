@@ -1,6 +1,8 @@
 defmodule Gameboy.EtsMemory do
   use Bitwise
 
+  @size_key :array_size
+
   def init(size, name) do
     handle = :ets.new(name, [:set, :public, :named_table])
     # Initialize contents of ets
@@ -10,8 +12,8 @@ defmodule Gameboy.EtsMemory do
   end
 
   def init_array(block_size, num_blocks, name) do
-    IO.puts("init_array(): name=#{name}, bank=#{num_blocks}, bank_size=#{block_size}")
     handle = :ets.new(name, [:set, :public, :named_table])
+    :ets.insert(handle, {@array_size, num_blocks})
     _init_array(block_size, handle, num_blocks)
   end
 
@@ -52,6 +54,8 @@ defmodule Gameboy.EtsMemory do
     # IO.puts("write_array(): name=#{handle}, bank=#{bank}, addr=#{addr}, value=#{value}")
     :ets.insert(handle, {{bank, addr}, value})
   end
+
+  def array_size(handle), do: :ets.lookup_element(handle, @array_size, 2)
 
   defp ets2list(handle, first, first, acc) do
     value = :ets.lookup_element(handle, first, 2)
