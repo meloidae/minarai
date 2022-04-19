@@ -10,7 +10,7 @@ defmodule Gameboy.AtomicsMemory do
   def init_array(block_size, num_blocks, name) do
     IO.puts("init_array(): name=#{name}, bank=#{num_blocks}, bank_size=#{block_size}")
     ref = :atomics.new(block_size * num_blocks, [signed: false])
-    {ref, block_size}
+    {ref, block_size, num_blocks}
   end
 
   def read(ref, addr), do: :atomics.get(ref, addr + 1)
@@ -28,15 +28,17 @@ defmodule Gameboy.AtomicsMemory do
     (high <<< 8) ||| low
   end
 
-  def read_array({ref, block_size}, bank, addr) do
+  def read_array({ref, block_size, _num_blocks}, bank, addr) do
     :atomics.get(ref, block_size * bank + addr + 1)
   end
 
   def write(ref, addr, value), do: :atomics.put(ref, addr + 1, value)
 
-  def write_array({ref, block_size}, bank, addr, value) do
+  def write_array({ref, block_size, _num_blocks}, bank, addr, value) do
     :atomics.put(ref, block_size * bank + addr + 1, value)
   end
+
+  def array_size({_ref, _block_size, num_blocks}), do: num_blocks
 
   # atomics2list() uses one-based indexing
   defp atomics2list(ref, first, first, acc) do
