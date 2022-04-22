@@ -10,14 +10,16 @@ defmodule Gameboy.MutableCartridge.Mbc1 do
   # mbc1-related functions
 
   require Record
-  Record.defrecordp(:mbc_state,
+  Record.defrecordp(
+    :mbc_state,
     mode: :simple_rom_bank,
     bank1: 0x1,
     bank2: 0x0,
     rom_low: 0x0000,
     rom_high: 0x4000,
     ram_bank: 0x00,
-    ram_enable: false)
+    ram_enable: false
+  )
 
   for k <- [:mode, :bank1, :bank2, :rom_low, :rom_high, :ram_bank, :ram_enable] do
     defmacro index(unquote(k)), do: mbc_state(unquote(k)) + 1
