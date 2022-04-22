@@ -22,7 +22,7 @@ defmodule Gameboy.MutableCartridge.Mbc1 do
   )
 
   for k <- [:mode, :bank1, :bank2, :rom_low, :rom_high, :ram_bank, :ram_enable] do
-    defmacro index(unquote(k)), do: mbc_state(unquote(k)) + 1
+    defmacrop index(unquote(k)), do: mbc_state(unquote(k)) + 1
   end
 
   def init do
