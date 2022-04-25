@@ -39,6 +39,13 @@ defmodule Gameboy.MutableCartridge.Mbc3 do
     TupleMemory.read(rom, offset ||| (addr &&& @bank_mask))
   end
 
+  def read_binary_rom_low(_mbc, rom, addr, len), do: TupleMemory.read_binary(rom, addr &&& @bank_mask, len)
+
+  def read_binary_rom_high(mbc, rom, addr, len) do
+    offset = :ets.lookup_element(mbc, :mbc_state, index(:rom_high))
+    TupleMemory.read_binary(rom, offset ||| (addr &&& @bank_mask), len)
+  end
+
   def read_ram(mbc, ram, addr) do
     mbc_state(
       ram_bank: bank,
