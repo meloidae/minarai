@@ -14,14 +14,14 @@ defmodule Gameboy.EtsMemory do
   def init_array(block_size, num_blocks, name) do
     handle = :ets.new(name, [:set, :public, :named_table])
     :ets.insert(handle, {@array_size, num_blocks})
-    _init_array(block_size, handle, num_blocks)
-  end
-
-  def _init_array(_block_size, handle, 0), do: handle
-  def _init_array(block_size, handle, i) do
-    0..block_size - 1
-    |> Enum.each(fn j -> :ets.insert(handle, {{i - 1, j}, 0}) end)
-    _init_array(block_size, handle, i - 1)
+    for block <- 0..num_blocks - 1 do
+      row = 0..block_size - 1
+            |> Enum.map(fn _ -> 0 end)
+      row = [block | row]
+            |> List.to_tuple()
+      :ets.insert(handle, row)
+    end
+    handle
   end
 
   def read(handle, addr) do
@@ -42,7 +42,7 @@ defmodule Gameboy.EtsMemory do
   end
 
   def read_array(handle, bank, addr) do
-    :ets.lookup_element(handle, {bank, addr}, 2)
+    :ets.lookup_element(handle, bank, addr + 2)
   end
 
   def write(handle, addr, value) do
@@ -52,7 +52,7 @@ defmodule Gameboy.EtsMemory do
 
   def write_array(handle, bank, addr, value) do
     # IO.puts("write_array(): name=#{handle}, bank=#{bank}, addr=#{addr}, value=#{value}")
-    :ets.insert(handle, {{bank, addr}, value})
+    :ets.update_element(handle, bank, {addr + 2, value})
   end
 
   def array_size(handle), do: :ets.lookup_element(handle, @array_size, 2)
