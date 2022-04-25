@@ -5,6 +5,7 @@ defmodule Gameboy.MutableCartridge.Mbc3 do
 
   @bank_size 0x4000
   @bank_mask 0xffff
+  @ram_bank_mask 0x1fff
 
   require Record
   Record.defrecordp(
@@ -53,7 +54,7 @@ defmodule Gameboy.MutableCartridge.Mbc3 do
       0x0a -> rtc_h
       0x0b -> rtc_dl
       0x0c -> rtc_dh
-      _ -> RWMemory.read_array(ram, bank, addr &&& @bank_mask)
+      _ -> RWMemory.read_array(ram, bank, addr &&& @ram_bank_mask)
     end
   end
 
@@ -67,7 +68,7 @@ defmodule Gameboy.MutableCartridge.Mbc3 do
       {true, 0x0a} -> :ets.update_element(mbc, :mbc_state, {index(:rtc_h), value})
       {true, 0x0b} -> :ets.update_element(mbc, :mbc_state, {index(:rtc_dl), value})
       {true, 0x0c} -> :ets.update_element(mbc, :mbc_state, {index(:rtc_dh), value})
-      {true, _}-> RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+      {true, _}-> RWMemory.write_array(ram, bank, addr &&& @ram_bank_mask, value)
     end
   end
 

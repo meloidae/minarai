@@ -6,6 +6,7 @@ defmodule Mbc1Test do
   alias Gameboy.EtsMemory, as: RWMemory
 
   @bank_size 0x4000
+  @ram_bank_size 0x2000
   @rom_size @bank_size * 64
   @ram_banks 4
 
@@ -27,7 +28,7 @@ defmodule Mbc1Test do
   test "set_bank_control mbc1 ram_enable" do
     mbc = Mbc1.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set ram_enable to true
     addr = 0x1fff
@@ -46,7 +47,7 @@ defmodule Mbc1Test do
   test "set_bank_control mbc1 mode" do
     mbc = Mbc1.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set mode to simple_rom_bank
     addr = 0x6000
@@ -68,7 +69,7 @@ defmodule Mbc1Test do
   test "set_bank_control mbc1 bank1" do
     mbc = Mbc1.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Change bank1 to 0x03
     addr = 0x3fff
@@ -81,7 +82,7 @@ defmodule Mbc1Test do
   test "set_bank_control mbc1 bank2" do
     mbc = Mbc1.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Change bank2 to 0x01 under simple_rom_bank mode
     addr = 0x5fff
@@ -158,10 +159,10 @@ defmodule Mbc1Test do
 
   test "ram mbc1" do
     mbc = Mbc1.init()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Write without enabling ram
-    addr = 0x32a1
+    addr = 0x12a1
     value = 0x13
     expected = 0
     Mbc1.write_ram(mbc, ram, addr, value)

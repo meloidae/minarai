@@ -4,10 +4,10 @@ defmodule Gameboy.MutableCartridge.Mbc1 do
   alias Gameboy.EtsMemory, as: RWMemory
 
   @bank_mask 0x3fff
+  @ram_bank_mask 0x1fff
   @mbc1_bank1_mask 0x1f
   @mbc1_bank2_mask 0x03
   @mbc1_mode_mask 0x01
-  # mbc1-related functions
 
   require Record
   Record.defrecordp(
@@ -54,14 +54,14 @@ defmodule Gameboy.MutableCartridge.Mbc1 do
 
   def read_ram(mbc, ram, addr) do
     bank = :ets.lookup_element(mbc, :mbc_state, index(:ram_bank))
-    RWMemory.read_array(ram, bank, addr &&& @bank_mask)
+    RWMemory.read_array(ram, bank, addr &&& @ram_bank_mask)
   end
 
   def write_ram(mbc, ram, addr, value) do
     mbc_state(ram_bank: bank, ram_enable: ram_enable) = :ets.lookup(mbc, :mbc_state)
                                                    |> hd()
     if ram_enable do
-      RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
+      RWMemory.write_array(ram, bank, addr &&& @ram_bank_mask, value)
     end
   end
 

@@ -6,6 +6,7 @@ defmodule Mbc3Test do
   alias Gameboy.EtsMemory, as: RWMemory
 
   @bank_size 0x4000
+  @ram_bank_size 0x2000
   @rom_size @bank_size * 64
   @ram_banks 4
 
@@ -31,7 +32,7 @@ defmodule Mbc3Test do
   test "set_bank_control mbc3 ram_enable" do
     mbc = Mbc3.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set ram_rtc_enable to true
     addr = 0x1fff
@@ -50,7 +51,7 @@ defmodule Mbc3Test do
   test "set_bank_control mbc3 ROM bank" do
     mbc = Mbc3.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set ROM bank number to 0x02
     addr = 0x3fff
@@ -69,7 +70,7 @@ defmodule Mbc3Test do
   test "set_bank_control mbc3 RAM bank or RTC register" do
     mbc = Mbc3.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set RAM bank number to 0x02
     addr = 0x5fff
@@ -93,7 +94,7 @@ defmodule Mbc3Test do
   test "set_bank_control mbc3 latch clock" do
     mbc = Mbc3.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Set latch clock to 0, then 1 (should end up as 1)
     addr = 0x6000
@@ -147,7 +148,7 @@ defmodule Mbc3Test do
              _ -> 0x0
            end)
     rom = get_rom(data)
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Retrive 1st non-zero from bank
     addr = 0x0004
@@ -165,7 +166,7 @@ defmodule Mbc3Test do
   test "ram mbc3" do
     mbc = Mbc3.init()
     rom = get_rom()
-    ram = RWMemory.init_array(@bank_size, @ram_banks, :cartram)
+    ram = RWMemory.init_array(@ram_bank_size, @ram_banks, :cartram)
 
     # Try to write without enabling ram (attempted write is ignored)
     addr = 0x0004
