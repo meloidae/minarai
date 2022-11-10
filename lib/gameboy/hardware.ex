@@ -503,9 +503,15 @@ defmodule Gameboy.Hardware do
         Hram.write(hardware(hw, :hram), addr, value)
         hw
       x when 0x10 <= x and x <= 0x26 ->
-        memory_cycle(hw, fn hw -> hardware(hw, apu: Apu.write(hardware(hw, :apu), addr, value)) end)
+        # memory_cycle(hw, fn hw -> hardware(hw, apu: Apu.write(hardware(hw, :apu), addr, value)) end)
+        hw = cycle(hw)
+        Apu.write(hardware(hw, :apu), addr, value)
+        hw
       x when 0x30 <= x and x <= 0x3f ->
-        memory_cycle(hw, fn hw -> hardware(hw, apu: Apu.write(hardware(hw, :apu), addr, value)) end)
+        # memory_cycle(hw, fn hw -> hardware(hw, apu: Apu.write(hardware(hw, :apu), addr, value)) end)
+        hw = cycle(hw)
+        Apu.write(hardware(hw, :apu), addr, value)
+        hw
       _ ->
         IO.warn("Write to #{Utils.to_hex(addr)} is not supported")
         cycle(hw)
