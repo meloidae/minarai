@@ -96,7 +96,7 @@ defmodule Gameboy.Utils do
   end
   def compile_template(template_path, props) do
     template_string = File.read!(template_path)
-    compile_template_string(template_string, pros)
+    compile_template_string(template_string, props)
   end
   def compile_template_string(string, []) do
     Code.compile_string(string)
