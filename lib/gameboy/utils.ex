@@ -84,4 +84,25 @@ defmodule Gameboy.Utils do
   def update_counter(name) do
     :ets.update_counter(@counter_table, name, 1, {name, 0})
   end
+
+  def is_plain_string(code) do
+    # Check if given code (as a string) represents a plain string as AST
+    ast = Code.string_to_quoted!(code)
+    is_binary(ast)
+  end
+
+  def compile_template(template_path, props) when is_tuple(props) do
+    compile_template(template_path, [props])
+  end
+  def compile_template(template_path, props) do
+    template_string = File.read!(template_path)
+    compile_template_string(template_string, pros)
+  end
+  def compile_template_string(string, []) do
+    Code.compile_string(string)
+  end
+  def compile_template_string(string, [{k, v} | rest]) do
+    key_string = "@{#{k}}"
+    compile_template_string(String.replace(string, key_string, v), rest)
+  end
 end
