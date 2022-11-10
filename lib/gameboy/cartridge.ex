@@ -84,6 +84,10 @@ defmodule Gameboy.Cartridge do
     end
   end
 
+  def set_rom(cart, rom), do: %{cart | rom: rom}
+
+  def get_rom(%{rom: rom}), do: rom
+
   defp init_ram(mbc, rom_memory) do
     case Memory.read(rom_memory, @ram_size) do
       0x00 ->
