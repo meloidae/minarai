@@ -34,8 +34,8 @@ defmodule Gameboy.RecordPpu do
                     bgp: 0x00,
                     obp0: 0x00,
                     obp1: 0x00,
-                    buffer: [],
-                    scanline_args: nil)
+                    buffer: [])
+                    # scanline_args: nil)
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
@@ -58,24 +58,100 @@ defmodule Gameboy.RecordPpu do
 
   @screen_width 160
   @screen_height 144
-  @n_scanline_args 9  # Accounts for lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1
+  # @n_scanline_args 10  # Accounts for oam, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1
+
+  @lyc_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
+  |> List.to_tuple()
+  @oam_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
+  |> List.to_tuple()
+  @vblank_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
+  |> List.to_tuple()
+  @hblank_stat 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 3)) != 0 end)
+  |> List.to_tuple()
+
+  @tile_bytes 0..0xffff
+  |> Enum.map(fn x ->
+    <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
+      l4::size(1), l5::size(1), l6::size(1), l7::size(1),
+      h0::size(1), h1::size(1), h2::size(1), h3::size(1),
+      h4::size(1), h5::size(1), h6::size(1), h7::size(1)>> = <<x::integer-size(16)>>
+    [(h0 <<< 1) ||| l0, (h1 <<< 1) ||| l1, (h2 <<< 1) ||| l2, (h3 <<< 1) ||| l3,
+     (h4 <<< 1) ||| l4, (h5 <<< 1) ||| l5, (h6 <<< 1) ||| l6, (h7 <<< 1) ||| l7]
+  end)
+  |> List.to_tuple()
+
+  @tile_bytes_rev 0..0xffff
+  |> Enum.map(fn x ->
+    <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
+      l4::size(1), l5::size(1), l6::size(1), l7::size(1),
+      h0::size(1), h1::size(1), h2::size(1), h3::size(1),
+      h4::size(1), h5::size(1), h6::size(1), h7::size(1)>> = <<x::integer-size(16)>>
+    [(h7 <<< 1) ||| l7, (h6 <<< 1) ||| l6, (h5 <<< 1) ||| l5, (h4 <<< 1) ||| l4,
+     (h3 <<< 1) ||| l3, (h2 <<< 1) ||| l2, (h1 <<< 1) ||| l1, (h0 <<< 1) ||| l0]
+  end)
+  |> List.to_tuple()
+
+  @tile_id_8800 0..0xff
+  |> Enum.map(fn x -> if x < 0x80, do: x, else: x - 256 end)
+  |> List.to_tuple()
+
+  @off_color 0..0xff
+  |> Enum.map(fn x -> x &&& 0x03 end)
+  |> List.to_tuple()
+
+  @prioritize_bg 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end)
+  |> List.to_tuple()
+
+  @flip_y 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
+  |> List.to_tuple()
+
+  @flip_x 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
+  |> List.to_tuple()
+
+  @palette_flag 0..0xff
+  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
+  |> List.to_tuple()
+
+  @tile_indexes 0..31
+  |> Enum.map(fn start ->
+    Enum.map(0..19, fn x ->
+      (start + x) &&& 0x1f
+    end)
+  end)
+  |> List.to_tuple()
+
+  @tile_indexes_extra 0..31
+  |> Enum.map(fn start ->
+    Enum.map(0..20, fn x ->
+      (start + x) &&& 0x1f
+    end)
+  end)
+  |> List.to_tuple()
+
+  @win_tile_indexes 0..20 |> Enum.to_list()
+  @white_color 0
 
   def init do
     vram = RWMemory.init(@vram_size, :vram)
     oam = Memory.init(@oam_size)
-    args = init_scanline_args()
     ppu(
       vram: vram,
-      oam: oam,
-      scanline_args: args
+      oam: oam
     )
   end
 
-  def init_scanline_args do
-    :ets.new(:scanline_args, [:set, :public, :named_table])
-  end
+  # def init_scanline_args do
+  #   :ets.new(:scanline_args, [:set, :public, :named_table])
+  # end
 
-  def read_oam(ppu(mode: mode, oam: oam) = _p, addr, value) do
+  def read_oam(ppu(mode: mode, oam: oam) = _p, addr) do
     # oam is not accessible during pixel transfer & oam search
     if mode == :pixel_transfer or mode == :oam_search do
       0xff
@@ -106,7 +182,7 @@ defmodule Gameboy.RecordPpu do
     end
   end
 
-  defp read_binary_vram(ppu(vram: vram) = _p, addr, len) do
+  def read_binary_vram(ppu(vram: vram) = _p, addr, len) do
     RWMemory.read_binary(vram, addr &&& @vram_mask, len)
   end
 
@@ -188,19 +264,6 @@ defmodule Gameboy.RecordPpu do
     write_binary_oam(p, 0x00, data, size)
   end
 
-  @lyc_stat 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
-  |> List.to_tuple()
-  @oam_stat 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
-  |> List.to_tuple()
-  @vblank_stat 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
-  |> List.to_tuple()
-  @hblank_stat 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 3)) != 0 end)
-  |> List.to_tuple()
-
   def cycle(ppu(lcdc: lcdc) = p) do
     if elem(@display_enable, lcdc), do: do_cycle(p), else: {p, 0}
   end
@@ -210,9 +273,10 @@ defmodule Gameboy.RecordPpu do
     {ppu(p, mode: :pixel_transfer, counter: @pixel_transfer_cycles), 0}
   end
   defp do_cycle(ppu(counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer) = p) do
-    pixels = draw_scanline(p)
+    pixels = draw_scanline_now(p)
     req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
-    {ppu(p, mode: :hblank, counter: @hblank_cycles, buffer: [pixels | buffer]), req}
+    {ppu(p, mode: :hblank, counter: @hblank_cycles, buffer: IO.iodata_to_binary([buffer | pixels])), req}
+    # {ppu(p, mode: :hblank, counter: @hblank_cycles), req}
   end
   defp do_cycle(ppu(counter: _, mode: :hblank, lcds: lcds, ly: ly, lyc: lyc) = p) do
     new_ly = ly + 1
@@ -220,8 +284,8 @@ defmodule Gameboy.RecordPpu do
       req = Interrupts.vblank()
       req = if elem(@vblank_stat, lcds), do: Interrupts.stat() ||| req, else: req
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
-      task = vblank_task(p)
-      {ppu(p, mode: :vblank, counter: @vblank_cycles, ly: new_ly, buffer: task), req}
+      render(p)
+      {ppu(p, mode: :vblank, counter: @vblank_cycles, ly: new_ly, buffer: []), req}
     else
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
@@ -233,7 +297,6 @@ defmodule Gameboy.RecordPpu do
     if new_ly == 153 do
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
-      render(p)
       {ppu(p, mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []), req}
     else
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat(), else: 0
@@ -241,83 +304,36 @@ defmodule Gameboy.RecordPpu do
     end
   end
 
-  @tile_bytes 0..0xffff
-  |> Enum.map(fn x ->
-    <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
-      l4::size(1), l5::size(1), l6::size(1), l7::size(1),
-      h0::size(1), h1::size(1), h2::size(1), h3::size(1),
-      h4::size(1), h5::size(1), h6::size(1), h7::size(1)>> = <<x::integer-size(16)>>
-    [(h0 <<< 1) ||| l0, (h1 <<< 1) ||| l1, (h2 <<< 1) ||| l2, (h3 <<< 1) ||| l3,
-     (h4 <<< 1) ||| l4, (h5 <<< 1) ||| l5, (h6 <<< 1) ||| l6, (h7 <<< 1) ||| l7]
-  end)
-  |> List.to_tuple()
-
-  @tile_bytes_rev 0..0xffff
-  |> Enum.map(fn x ->
-    <<l0::size(1), l1::size(1), l2::size(1), l3::size(1),
-      l4::size(1), l5::size(1), l6::size(1), l7::size(1),
-      h0::size(1), h1::size(1), h2::size(1), h3::size(1),
-      h4::size(1), h5::size(1), h6::size(1), h7::size(1)>> = <<x::integer-size(16)>>
-    [(h7 <<< 1) ||| l7, (h6 <<< 1) ||| l6, (h5 <<< 1) ||| l5, (h4 <<< 1) ||| l4,
-     (h3 <<< 1) ||| l3, (h2 <<< 1) ||| l2, (h1 <<< 1) ||| l1, (h0 <<< 1) ||| l0]
-  end)
-  |> List.to_tuple()
-
-  @color {<<0xe0, 0xf0, 0xe7>>, <<0x8b, 0xa3, 0x94>>, <<0x55, 0x64, 0x5a>>, <<0x34, 0x3d, 0x37>>}
-  @tile_id_8800 0..0xff
-  |> Enum.map(fn x -> if x < 0x80, do: x, else: x - 256 end)
-  |> List.to_tuple()
-
-  @off_color 0..0xff
-  |> Enum.map(fn x -> x &&& 0x03 end)
-  |> List.to_tuple()
-
-  @prioritize_bg 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end)
-  |> List.to_tuple()
-
-  @flip_y 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end)
-  |> List.to_tuple()
-
-  @flip_x 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end)
-  |> List.to_tuple()
-
-  @palette_flag 0..0xff
-  |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end)
-  |> List.to_tuple()
-
   defp reduce_with_index([], _, acc, _), do: acc
   defp reduce_with_index([h | t], index, acc, reduce_fn) do
     reduce_with_index(t, index + 1, reduce_fn.(h, index, acc), reduce_fn)
   end
 
-  defp filter_oam_y(oam_data, ly, sprite_size), do: filter_oam_y(oam_data, ly, sprite_size, 0, [])
-  defp filter_oam_y(<<>>, _ly, _sprite_size, _count, acc), do: acc
-  defp filter_oam_y(<<_, _, _, _, _::binary>>, _ly, _sprite_size, 10, acc), do: acc
-  defp filter_oam_y(<<y, x, t, f, rest::binary>>, ly, sprite_size, count, acc) do
-    if ((ly - y + 16) &&& 0xff) < sprite_size do
-      filter_oam_y(rest, ly, sprite_size, count + 1, [{y, x, t, f} | acc])
+  defp filter_oam_y(oam_data, ly, obj_size), do: filter_oam_y(oam_data, ly, obj_size, 0, [])
+  defp filter_oam_y(<<>>, _ly, _obj_size, _count, acc), do: acc
+  defp filter_oam_y(<<_, _, _, _, _::binary>>, _ly, _obj_size, 10, acc), do: acc
+  defp filter_oam_y(<<y, x, t, f, rest::binary>>, ly, obj_size, count, acc) do
+    if ((ly - y + 16) &&& 0xff) < obj_size do
+      filter_oam_y(rest, ly, obj_size, count + 1, [{y, x, t, f} | acc])
     else
-      filter_oam_y(rest, ly, sprite_size, count, acc)
+      filter_oam_y(rest, ly, obj_size, count, acc)
     end
   end
 
   defp filter_oam_x(oam_list), do: filter_oam_x(oam_list, 0, [])
   defp filter_oam_x([], _count, acc), do: acc
-  defp filter_oam_x([{_, x, _, _} = sprite | rest], count, acc) do
+  defp filter_oam_x([{_, x, _, _} = obj | rest], count, acc) do
     if x > 0 and x < 168 do
-      filter_oam_x(rest, count + 1, [{sprite, count} | acc])
+      filter_oam_x(rest, count + 1, [{obj, count} | acc])
     else
       filter_oam_x(rest, count, acc)
     end
   end
 
-  defp get_sprite_map(oam_data, vram, lcdc, ly, obp0, obp1) do
-    sprite_size = elem(@obj_size, lcdc)
+  defp get_object_map(oam_data, vram, lcdc, ly, obp0, obp1) do
+    obj_size = elem(@obj_size, lcdc)
     oam_data
-    |> filter_oam_y(ly, sprite_size)
+    |> filter_oam_y(ly, obj_size)
     |> filter_oam_x()
     |> Enum.sort(fn {{_, x0, _, _}, i0}, {{_, x1, _, _}, i1} -> 
       (x0 < x1) or (x0 === x1 and i0 > i1)
@@ -327,18 +343,15 @@ defmodule Gameboy.RecordPpu do
       prioritize_bg = elem(@prioritize_bg, flags)
       # Vertical flip
       line = if elem(@flip_y, flags) do
-        sprite_size - ((ly - y + 16) &&& 0xff) - 1
+        obj_size - ((ly - y + 16) &&& 0xff) - 1
       else
         (ly - y + 16) &&& 0xff
       end
-      # If line >= 8, get pixels from the next tile (this can happen when sprite_size == 16)
+      # If line >= 8, get pixels from the next tile (this can happen when obj_size == 16)
       {line, tile_id} = if line >= 8, do: {line - 8, tile_id + 1}, else: {line, tile_id}
       # Horizontal flip
-      if elem(@flip_x, flags) do
-        elem(@tile_bytes_rev, RWMemory.read_short(vram, (tile_id * 16) + (line * 2)))
-      else
-        elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + (line * 2)))
-      end
+      tile_bytes = if elem(@flip_x, flags), do: @tile_bytes_rev, else: @tile_bytes
+      elem(tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + (line * 2)))
       |> reduce_with_index(0, acc, fn p, i, m ->
         if p === 0 do
           m
@@ -350,60 +363,52 @@ defmodule Gameboy.RecordPpu do
     end)
   end
 
-  defp put_args(ref, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
-    :ets.insert(ref, {ly, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1})
-  end
+  # defp put_args(ref, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
+  #   :ets.insert(ref, {ly, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1})
+  # end
 
-  defp draw_scanline(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1, scanline_args: args) = _p) do
-    put_args(args, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
-    oam_data
-  end
+  # defp draw_scanline(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1, scanline_args: args) = _p) do
+  #   put_args(args, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+  # end
 
-  @tile_indexes 0..31
-  |> Enum.map(fn start ->
-    Enum.map(0..19, fn x ->
-      (start + x) &&& 0x1f
-    end)
-  end)
-  |> List.to_tuple()
-
-  @tile_indexes_extra 0..31
-  |> Enum.map(fn start ->
-    Enum.map(0..20, fn x ->
-      (start + x) &&& 0x1f
-    end)
-  end)
-  |> List.to_tuple()
-
-  @win_tile_indexes 0..20 |> Enum.to_list()
-
-  defp scanline_with_args(oam_data, row, vram, ref) do
-    [{_, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
+  defp draw_scanline_now(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1) = _p) do
     scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
   end
 
+  # defp scanline_with_args(oam_data, row, vram, ref) do
+  #   [{_, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
+  #   scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+  # end
+  # defp scanline_with_args(row, vram, ref) do
+  #   [{_, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
+  #   scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
+  # end
+
   defp scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
-    sprites = if elem(@obj_enable, lcdc) do
-      get_sprite_map(oam_data, vram, lcdc, ly, obp0, obp1)
+    objs = if elem(@obj_enable, lcdc) do
+      get_object_map(oam_data, vram, lcdc, ly, obp0, obp1)
     else
       %{}
     end
-    n_sp = map_size(sprites)
+    n_obj = map_size(objs)
 
-    if elem(@bg_win_enable, lcdc) do
+    if not elem(@bg_win_enable, lcdc) do
+      mix_no_bg_win(objs, n_obj)
+    else
       y = (scy + ly) &&& 0xff
-      bg_tile_line = rem(y, 8) * 2
+      bg_line = rem(y, 8) * 2
       bg_row_addr = elem(@bg_tile_map_addr, lcdc) + (div(y, 8) * 32)
       bg_tile_index = div(scx, 8) &&& 0x1f
       scx_offset = rem(scx, 8)
 
-      bg_tile_fn = if elem(@tile_data_addr, lcdc) do
+      tile_bytes = @tile_bytes
+      bg_fn = if elem(@tile_data_addr, lcdc) do
         # 0x8000 address mode
-        fn tile_id -> elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + bg_tile_line)) end
+        fn tile_id -> elem(tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + bg_line)) end
       else
         # 0x8800 address mode
         fn tile_id ->
-          elem(@tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_tile_line))
+          elem(tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + bg_line))
         end
       end
 
@@ -416,160 +421,149 @@ defmodule Gameboy.RecordPpu do
       bg_row = RWMemory.read_range(vram, bg_row_addr, 32)
                |> List.to_tuple()
       
-      if elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166 do
+      render_window = elem(@window_enable, lcdc) and ly >= wy and wy <= 143 and wx >= 0 and wx <= 166
+      if not render_window do
+        mix_no_win(-scx_offset, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp)
+      else
         win_y = (ly - wy) &&& 0xff
         win_x = wx - 7
         win_row_addr = elem(@window_tile_map_addr, lcdc) + (div(win_y, 8) * 32)
-        win_tile_line = rem(win_y, 8) * 2
+        win_line = rem(win_y, 8) * 2
         win_row = RWMemory.read_range(vram, win_row_addr, 32)
                   |> List.to_tuple()
-        win_tile_fn = if elem(@tile_data_addr, lcdc) do
+        win_fn = if elem(@tile_data_addr, lcdc) do
           # 0x8000 address mode
-          fn tile_id -> elem(@tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + win_tile_line)) end
+          fn tile_id -> elem(tile_bytes, RWMemory.read_short(vram, (tile_id * 16) + win_line)) end
         else
           # 0x8800 address mode
           fn tile_id ->
-            elem(@tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_tile_line))
+            elem(tile_bytes, RWMemory.read_short(vram, 0x1000 + (elem(@tile_id_8800, tile_id) * 16) + win_line))
           end
         end
         win_indexes = @win_tile_indexes
-        mix(-scx_offset, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
-      else
-        mix_no_win(-scx_offset, bg_indexes, bg_row, bg_tile_fn, sprites, n_sp, bgp)
+        mix(-scx_offset, win_x, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp)
       end
-    else
-      mix_no_bg_win(sprites, n_sp)
     end
   end
 
-  defp mix(x, win_x, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) do
+  defp mix(x, win_x, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp) do
     # Entry point
     [h_bg | rest_bg] = bg_indexes
-    mix_pre_win(x, win_x, bg_tile_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+    mix_pre_win(x, win_x, bg_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp)
   end
 
-  defp mix_pre_win(x, win_x, [_p | rest], bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) when x < 0 do
+  defp mix_pre_win(x, win_x, [_p | rest], bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp) when x < 0 do
     # Throw away pixels while x < 0
-    mix_pre_win(x + 1, win_x, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp)
+    mix_pre_win(x + 1, win_x, rest, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp)
   end
-  defp mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp) do
+  defp mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp) do
     # Start mixing pixels
-    _mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, [])
+    _mix_pre_win(x, win_x, bg_tile, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, [])
   end
 
-  defp _mix_pre_win(x, win_x, _bg_tile, _bg_indexes, _bg_row, _bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) when win_x <= 0 do
+  defp _mix_pre_win(x, win_x, _bg_tile, _bg_indexes, _bg_row, _bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, pixels) when win_x <= 0 do
     # Start rendering windows
     [h_win | rest_win] = win_indexes
-    win_tile = win_tile_fn.(elem(win_row, h_win)) 
+    win_tile = win_fn.(elem(win_row, h_win)) 
     win_tile = if win_x === 0, do: win_tile, else: Enum.drop(win_tile, -win_x)
-    _mix(x, win_tile, rest_win, win_row, win_tile_fn, sprites, n_sp, bgp, pixels)
+    _mix(x, win_tile, rest_win, win_row, win_fn, objs, n_obj, bgp, pixels)
   end
-  defp _mix_pre_win(x, win_x, [] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) do
+  defp _mix_pre_win(x, win_x, [] = _bg_tile, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, pixels) do
     # Get a new tile when bg_tile is empty
     [h_bg | rest_bg] = bg_indexes
-    _mix_pre_win(x, win_x, bg_tile_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels)
+    _mix_pre_win(x, win_x, bg_fn.(elem(bg_row, h_bg)), rest_bg, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, pixels)
   end
-  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, 0, bgp, pixels) do
-    # No sprite pixels
-    pixel = elem(@color, (bgp >>> (p * 2)) &&& 0x3)
-    _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, 0, bgp, [pixels | pixel])
+  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, 0, bgp, pixels) do
+    # No obj pixels
+    pixel = [(bgp >>> (p * 2)) &&& 0x3]
+    _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, 0, bgp, [pixels | pixel])
   end
-  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, pixels) do
-    # Mix a background and sprite pixel
-    case sprites do
+  defp _mix_pre_win(x, win_x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, pixels) do
+    # Mix a background and obj pixel
+    case objs do
       %{^x => {sp, true}} ->
         bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-        pixel = if bg_pixel === elem(@off_color, bgp), do: elem(@color, sp), else: elem(@color, bg_pixel)
-        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+        pixel = if bg_pixel === elem(@off_color, bgp), do: sp, else: bg_pixel
+        pixel = [pixel]
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj - 1, bgp, [pixels | pixel])
       %{^x => {sp, _}} ->
-        pixel = elem(@color, sp)
-        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+        pixel = [sp]
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj - 1, bgp, [pixels | pixel])
       _ ->
         bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-        pixel = elem(@color, bg_pixel)
-        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_tile_fn, win_indexes, win_row, win_tile_fn, sprites, n_sp, bgp, [pixels | pixel])
+        pixel = [bg_pixel]
+        _mix_pre_win(x + 1, win_x - 1, rest, bg_indexes, bg_row, bg_fn, win_indexes, win_row, win_fn, objs, n_obj, bgp, [pixels | pixel])
     end
   end
 
-  defp mix_no_win(x, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) do
+  defp mix_no_win(x, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp) do
     # Entry point
-    [h | rest] = bg_tile_indexes
-    mix_no_win(x, bg_tile_fn.(elem(bg_tile_row, h)), rest, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp)
+    [h | rest] = bg_indexes
+    mix_no_win(x, bg_fn.(elem(bg_row, h)), rest, bg_row, bg_fn, objs, n_obj, bgp)
   end
-  defp mix_no_win(x, [_p | rest], bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) when x < 0 do
+  defp mix_no_win(x, [_p | rest], bg_indexes, bg_row, bg_fn, objs, n_obj, bgp) when x < 0 do
     # Throw away pixels while x < 0
-    mix_no_win(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp)
+    mix_no_win(x + 1, rest, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp)
   end
-  defp mix_no_win(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp) do
+  defp mix_no_win(x, bg_tile, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp) do
     # Start mixing pixels
-    _mix(x, bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, [])
+    _mix(x, bg_tile, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp, [])
   end
 
-  # No background or window (sprites only)
-  defp mix_no_bg_win(sprites, n_sp) do
+  # No background or window (objs only)
+  defp mix_no_bg_win(objs, n_obj) do
     # Entry point
-    _mix_no_bg_win(0, sprites, n_sp, elem(@color, 0), [])
+    _mix_no_bg_win(0, objs, n_obj, [])
   end
-  defp _mix_no_bg_win(@screen_width, _sprites, _n_sp, _white_color, pixels), do: pixels
-  defp _mix_no_bg_win(x, sprites, 0, white_color, pixels) do
-    # No sprite pixels = just append white_color
-    _mix_no_bg_win(x + 1, sprites, 0, white_color, [pixels | white_color])
+  defp _mix_no_bg_win(@screen_width, _objs, _n_obj, pixels), do: pixels
+  defp _mix_no_bg_win(x, objs, 0, pixels) do
+    # No obj pixels = just append white_color
+    _mix_no_bg_win(x + 1, objs, 0, [pixels | [@white_color]])
   end
-  defp _mix_no_bg_win(x, sprites, n_sp, white_color, pixels) do
-    # Mix a pixel (white_color or sprite pixel)
-    case sprites do
+  defp _mix_no_bg_win(x, objs, n_obj, pixels) do
+    # Mix a pixel (white_color or obj pixel)
+    case objs do
       %{^x => {sp, _}} ->
-        pixel = elem(@color, sp)
-        _mix_no_bg_win(x + 1, sprites, n_sp - 1, white_color, [pixels | pixel])
+        pixel = [sp]
+        _mix_no_bg_win(x + 1, objs, n_obj - 1, [pixels | pixel])
       _ ->
-        _mix_no_bg_win(x + 1, sprites, n_sp, white_color, [pixels | white_color])
+        _mix_no_bg_win(x + 1, objs, n_obj, [pixels | [@white_color]])
     end
   end
 
-  defp _mix(@screen_width, _bg_tile, _bg_tile_indexes, _bg_tile_row, _bg_tile_fn, _sprites, _n_sp, _bgp, pixels), do: pixels
-  defp _mix(x, [] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels) do
+  defp _mix(@screen_width, _bg_tile, _bg_indexes, _bg_row, _bg_fn, _objs, _n_obj, _bgp, pixels), do: pixels
+  defp _mix(x, [] = _bg_tile, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp, pixels) do
     # Get a new tile when bg_tile is empty
-    [h | rest] = bg_tile_indexes
-    _mix(x, bg_tile_fn.(elem(bg_tile_row, h)), rest, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels)
+    [h | rest] = bg_indexes
+    _mix(x, bg_fn.(elem(bg_row, h)), rest, bg_row, bg_fn, objs, n_obj, bgp, pixels)
   end
-  defp _mix(x, [p | rest] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, 0, bgp, pixels) do
-    # No sprite pixels
+  defp _mix(x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_fn, objs, 0, bgp, pixels) do
+    # No obj pixels
     bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-    pixel = elem(@color, bg_pixel)
-    _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, 0, bgp, [pixels | pixel])
+    pixel = [bg_pixel]
+    _mix(x + 1, rest, bg_indexes, bg_row, bg_fn, objs, 0, bgp, [pixels | pixel])
   end
-  defp _mix(x, [p | rest] = _bg_tile, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, pixels) do
+  defp _mix(x, [p | rest] = _bg_tile, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp, pixels) do
     # Mix a pixel
-    case sprites do
+    case objs do
       %{^x => {sp, true}} ->
         bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-        pixel = if bg_pixel === elem(@off_color, bgp), do: elem(@color, sp), else: elem(@color, bg_pixel)
-        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+        pixel = if bg_pixel === elem(@off_color, bgp), do: sp, else: bg_pixel
+        pixel = [pixel]
+        _mix(x + 1, rest, bg_indexes, bg_row, bg_fn, objs, n_obj - 1, bgp, [pixels | pixel])
       %{^x => {sp, _}} ->
-        pixel = elem(@color, sp)
-        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp - 1, bgp, [pixels | pixel])
+        pixel = [sp]
+        _mix(x + 1, rest, bg_indexes, bg_row, bg_fn, objs, n_obj - 1, bgp, [pixels | pixel])
       _ ->
         bg_pixel = (bgp >>> (p * 2)) &&& 0x3
-        pixel = elem(@color, bg_pixel)
-        _mix(x + 1, rest, bg_tile_indexes, bg_tile_row, bg_tile_fn, sprites, n_sp, bgp, [pixels | pixel])
+        pixel = [bg_pixel]
+        _mix(x + 1, rest, bg_indexes, bg_row, bg_fn, objs, n_obj, bgp, [pixels | pixel])
     end
   end
 
-  defp map_rev_decr([], acc, _n, _), do: acc
-  defp map_rev_decr([h | t], acc, n, map_fn) do
-    map_rev_decr(t, [map_fn.(h, n) | acc], n - 1, map_fn)
+  defp render(ppu(buffer: buffer)) do
+    screen_data = IO.iodata_to_binary(buffer)
+    send(Minarai, {:update_screen, screen_data})
   end
-
-  defp vblank_task(ppu(buffer: buffer, vram: vram, scanline_args: args)) do
-    # oam_data = buffer |> IO.iodata_to_binary()
-    Task.async(fn ->
-      data = map_rev_decr(buffer, [], 143, fn oam, row -> scanline_with_args(oam, row, vram , args) end)
-             |> IO.iodata_to_binary()
-      send(Minarai, {:update, data})
-      # IO.puts("buffer size: #{buffer |> :erlang.term_to_binary() |> :erlang.byte_size()}")
-    end)
-  end
-
-  defp render(ppu(buffer: buffer)), do: Task.await(buffer)
 
 end
