@@ -27,6 +27,12 @@ defmodule Gameboy.Timer do
     end
   end)
   |> List.to_tuple()
+  @tac_value 0..0xff
+  |> Enum.map(fn x ->
+    lower_bits = x &&& 0b111
+    0b11111000 ||| lower_bits
+  end)
+  |> List.to_tuple()
 
 
   def init do
@@ -153,12 +159,6 @@ defmodule Gameboy.Timer do
     {timer(t, :tac), t, req}
   end
 
-  @tac_value 0..0xff
-  |> Enum.map(fn x ->
-    lower_bits = x &&& 0b111
-    0b11111000 ||| lower_bits
-  end)
-  |> List.to_tuple()
   # def set_tac_cycle(timer, value) do
   #   {timer, req} = cycle(timer)
   #   old_bit = elem(@timer_enable, timer.tac) and check_counter_bit(timer.counter, timer.tac)
