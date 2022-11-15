@@ -83,46 +83,26 @@ defmodule Gameboy do
   end
 
   def run({cpu, hw}) do
-    # hw = Hardware.recover_rom(hw)
     loop({cpu, hw})
   end
-
-  @ten_frames 17556 * 40
   defp loop(gb), do: loop(Gameboy.step(gb))
-  # defp loop({cpu, hw} = gb) do
-  #   counter = Hardware.get_counter(hw)
-  #   if counter < @ten_frames do
-  #     loop(Gameboy.step(gb))
-  #   else
-  #     new_counter = counter - @ten_frames
-  #     hw = Hardware.set_counter(hw, new_counter)
-  #     # hw = Hardware.prepare_for_copy(hw)
-  #     pid = Process.spawn(fn -> run({cpu, hw}) end, [:link])
-  #     send(Minarai, {:change_pid, pid})
-  #   end
-  # end
 
-  @break 0x1000
-  def debug_start(opts \\ []) do
-    gb = Gameboy.init(opts)
-    debug_loop(gb)
+  @counter_limit 17556 * 200
+  def start_chain(gb) do
+    ui_pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
+    :erlang.trace(self(), true, [:garbage_collection, tracer: ui_pid])
+    :ets.update_element(:gb_process, :logic_pid, {2, self()})
+    loop_and_chain(0, gb)
   end
+  defp loop_and_chain(@counter_limit, gb) do
+    Process.spawn(fn -> start_chain(gb) end, [:link])
+  end
+  defp loop_and_chain(counter, {_cpu, _hw} = gb), do: loop_and_chain(counter + 1, Gameboy.step(gb))
 
-  # defp debug_loop(gb) when gb.cpu.pc === @break, do: debug_step(gb)
-  defp debug_loop({%{cpu: %{pc: pc}}, _} = gb) when pc >= @break, do: debug_step(gb)
-  defp debug_loop(gb), do: debug_loop(Gameboy.step(gb))
-
-  defp debug_step(gb) do
-    # IO.puts("#{disassemble(gb.cpu.opcode, gb.cpu, gb.hw)}")
-    # IO.puts("#{inspect(gb.cpu)}")
-    # IO.puts("#{inspect(gb.hw.ppu.counter)}")
-    # IO.puts("#{Utils.to_hex(gb.hw.ppu.lcdc)}")
-    # receive do
-    #  :step ->
-    #    true
-    #end
-
-    debug_step(Gameboy.step(gb))
+  def resume(pid, gb) do
+    send(pid, {:resume, gb})
+    # gb_bin = :erlang.term_to_binary(gb)
+    # send(pid, {:resume_bin, gb_bin})
   end
 
   def save_state(gb, path \\ "state.save") do
@@ -137,5 +117,4 @@ defmodule Gameboy do
     IO.puts("Loading the game state from #{path}")
     state
   end
-
 end

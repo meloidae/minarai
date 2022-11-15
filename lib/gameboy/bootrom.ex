@@ -19,12 +19,6 @@ defmodule Gameboy.Bootrom do
     {TupleMemory.init(data), true}
   end
 
-  def set_rom({_memory, active}, rom_data) do
-    {rom_data, active}
-  end
-
-  def get_rom({memory, _active}), do: memory
-
   def active({_memory, active} = _bootrom), do: active
 
   # Non-zero value disables bootrom

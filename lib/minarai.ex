@@ -9,6 +9,7 @@ defmodule Minarai do
   @scale 4
   # @size {@width * @scale, @height * @scale}
   @save_path "state.save"
+  @color {<<0xe0, 0xf0, 0xe7>>, <<0x8b, 0xa3, 0x94>>, <<0x55, 0x64, 0x5a>>, <<0x34, 0x3d, 0x37>>}
 
   #######
   # API #
@@ -72,22 +73,30 @@ defmodule Minarai do
 
     keys = %{start: false, select: false, b: false, a: false, down: false, up: false, left: false, right: false}
 
+    :ets.new(:gb_process, [:set, :public, :named_table])
+
+    Utils.compile_template("templates/bootrom_template.ex", {"path", opts[:bootrom]})
+    Utils.compile_template("templates/cartridge_template.ex", {"path", opts[:cart]})
     gb = Gameboy.init(opts)
-    spawn_opt = [:link]
+    spawn_opt = [:link, min_heap_size: 2000]
+    pid = Process.spawn(fn -> Gameboy.start_chain(gb) end, spawn_opt)
+    :ets.insert(:gb_process, {:logic_pid, pid})
+    :ets.insert(:gb_process, {:ui_pid, self()})
+
     state = %{
       frame: frame,
       canvas: canvas,
       scale: scale,
       texture: texture,
       buffer: buffer,
-      pid: Process.spawn(fn -> Gameboy.run(gb) end, spawn_opt),
       prev_time: nil,
       fps: [],
       keys: keys,
       save_path: save_path,
     }
 
-    :erlang.trace(state.pid, true, [:garbage_collection, tracer: self()])
+    # :erlang.trace(pid, true, [:garbage_collection, tracer: self()])
+    # :erlang.trace(next_pid, true, [:garbage_collection, tracer: self()])
 
     {frame, state}
   end
@@ -140,11 +149,26 @@ defmodule Minarai do
       diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
       fps = 1_000_000 / diff
       :wxTopLevelWindow.setTitle(frame, "#{@title} [FPS: #{Float.round(fps, 2)}]")
-      # [fps | fps_stats]
-      []
+      [fps | fps_stats]
     else
       []
     end
+    state = %{state | buffer: buffer, prev_time: curr_time, fps: fps_stats}
+    :wx.batch(fn -> render(state) end)
+    {:noreply, state}
+  end
+
+  def handle_info({:update_screen, pixels}, %{frame: frame, prev_time: prev_time, fps: fps_stats} = state) do
+    curr_time = System.monotonic_time()
+    fps_stats = if !is_nil(prev_time) do
+      diff = System.convert_time_unit(curr_time - prev_time, :native, :microsecond)
+      fps = 1_000_000 / diff
+      :wxTopLevelWindow.setTitle(frame, "#{@title} [FPS: #{Float.round(fps, 2)}]")
+      [fps | fps_stats]
+    else
+      []
+    end
+    buffer = map_pixel_to_color(pixels)
     state = %{state | buffer: buffer, prev_time: curr_time, fps: fps_stats}
     :wx.batch(fn -> render(state) end)
     {:noreply, state}
@@ -165,7 +189,8 @@ defmodule Minarai do
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, @enter, _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
   }, state) do
-    pid = state.pid
+    # pid = state.pid
+    pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     send(pid, :step)
     {:noreply, state}
   end
@@ -173,7 +198,9 @@ defmodule Minarai do
   # Save state: s key
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, ?S, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, %{pid: pid, save_path: path} = state) do
+  }, %{save_path: path} = state) do
+    # pid = state.pid
+    pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     send(pid, {:save, path})
     {:noreply, state}
   end
@@ -181,7 +208,9 @@ defmodule Minarai do
   # Load state: l key
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, ?L, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, %{pid: pid, save_path: path} = state) do
+  }, %{save_path: path} = state) do
+    # pid = state.pid
+    pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     send(pid, {:load, path})
     {:noreply, state}
   end
@@ -189,7 +218,9 @@ defmodule Minarai do
   # Log fps stats
   def handle_event({:wx, _, _, _,
     {:wxKey, :key_down, _x, _y, ?F, true, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-  }, %{pid: pid} = state) do
+  }, state) do
+    # pid = state.pid
+    pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     # Log fps stats to file
     # fps_output = fps_stats
     #          |> Enum.reverse()
@@ -216,7 +247,9 @@ defmodule Minarai do
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
       {:wxKey, :key_down, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-    }, %{pid: pid, keys: %{unquote(name) => pressed} = keys} = state) do
+    }, %{keys: %{unquote(name) => pressed} = keys} = state) do
+      # pid = state.pid
+      pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
       if !pressed do
         send(pid, {:key_down, unquote(name)})
         Map.put(keys, unquote(name), true)
@@ -229,7 +262,9 @@ defmodule Minarai do
   for {name, code} <- Enum.zip([key_names, key_codes]) do
     def handle_event({:wx, _, _, _,
       {:wxKey, :key_up, _x, _y, unquote(code), _ctrl, _shift, _alt, _meta, _uni_char, _raw_code, _raw_flags}
-    }, %{pid: pid, keys: keys} = state) do
+    }, %{keys: keys} = state) do
+      # pid = state.pid
+      pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
       send(pid, {:key_up, unquote(name)})
       {:noreply, %{state | keys: Map.put(keys, unquote(name), false)}}
     end
@@ -367,6 +402,14 @@ defmodule Minarai do
     draw_texture(0, 0, scale, texture)
     :wxGLCanvas.swapBuffers(canvas)
     :ok
+  end
+
+  defp map_pixel_to_color(pixels) do
+    map_pixel_to_color(pixels, <<>>)
+  end
+  defp map_pixel_to_color(<<>>, acc), do: IO.iodata_to_binary(acc)
+  defp map_pixel_to_color(<<p, rest::binary>>, acc) do
+    map_pixel_to_color(rest, [acc | elem(@color, p)])
   end
 
   defp power_of_two_roof(x, n \\ 1)

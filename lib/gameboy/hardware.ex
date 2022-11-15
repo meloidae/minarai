@@ -103,14 +103,6 @@ defmodule Gameboy.Hardware do
     )
   end
 
-  def set_rom(hardware(bootrom: br, cart: cart) = hw, bootrom, rom) do
-    hardware(hw, bootrom: Bootrom.set_rom(br, bootrom), cart: Cartridge.set_rom(cart, rom))
-  end
-
-  def get_rom(hardware(bootrom: br, cart: cart)) do
-    {Bootrom.get_rom(br), Cartridge.get_rom(cart)}
-  end
-
   # def keydown(%Hardware{joypad: joypad, intr: intr} = hw, key_name) do
   def keydown(hardware(joypad: joypad, intr: intr) = hw, key_name) do
     {joypad, req} = Joypad.keydown(joypad, key_name)
@@ -156,7 +148,8 @@ defmodule Gameboy.Hardware do
   # end
 
   # defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
-  defp _read(hardware(bootrom: {_, true} = bootrom) = hw, addr, 0x00) do
+  # defp _read(hardware(bootrom: {_, true} = bootrom) = hw, addr, 0x00) do
+  defp _read(hardware(bootrom: true = bootrom) = hw, addr, 0x00) do
     hw = cycle(hw)
     {Bootrom.read(bootrom, addr), hw}
   end
