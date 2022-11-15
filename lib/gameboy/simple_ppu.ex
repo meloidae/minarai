@@ -1,5 +1,5 @@
 defmodule Gameboy.SimplePpu do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Memory
   # alias Gameboy.MapMemory
   alias Gameboy.EtsMemory, as: RWMemory

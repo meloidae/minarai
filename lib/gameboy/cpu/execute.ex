@@ -1,5 +1,5 @@
 defmodule Gameboy.Cpu.Execute do
-  use Bitwise
+  import Bitwise
   # alias Gameboy.Cpu
   alias Gameboy.RecordCpu, as: Cpu
   alias Gameboy.Hardware

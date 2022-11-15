@@ -1,5 +1,5 @@
 defmodule Gameboy.EtsMemory do
-  use Bitwise
+  import Bitwise
 
   def init(size, name) do
     handle = :ets.new(name, [:set, :public, :named_table])

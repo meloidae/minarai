@@ -1,5 +1,5 @@
 defmodule Gameboy.Joypad do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Joypad
   alias Gameboy.Interrupts
 

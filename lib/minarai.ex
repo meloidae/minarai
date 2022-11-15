@@ -1,6 +1,6 @@
 defmodule Minarai do
   @behaviour :wx_object
-  use Bitwise
+  import Bitwise
   alias Gameboy.Utils
 
   @title 'Minarai'

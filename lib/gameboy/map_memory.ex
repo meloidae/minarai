@@ -1,5 +1,5 @@
 defmodule Gameboy.MapMemory do
-  use Bitwise
+  import Bitwise
   alias Gameboy.MapMemory
 
   def init(size, _name), do: init(size)

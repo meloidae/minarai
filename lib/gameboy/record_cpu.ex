@@ -1,5 +1,5 @@
 defmodule Gameboy.RecordCpu do
-  use Bitwise
+  import Bitwise
   require Record
 
   alias Gameboy.Hardware
