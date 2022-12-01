@@ -40,6 +40,12 @@ Controls are:
 - [ ] sound (if possible)
 
 ## Notes
+### On elixir's performance
+Single-thread performance of Elixir is good enough to achieve 60+FPS in GB emulation.  
+However, I've also encountered occasional but significant drop offs in frame rates.
+These drop offs coincide with full-sweep GC.
+
+### Some implementation details
 Only hram is accessible by cpu during oam dma transfer & hram can't be the source of dma transfer  
 - The source region of dma transfer cannot be written to during the transfer  
 - Should be okay to get all source region at once, then write them to the destination region onde by one  
