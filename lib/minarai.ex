@@ -48,16 +48,16 @@ defmodule Minarai do
 
 
     wx = :wx.new([])
-    frame = :wxFrame.new(wx, :wx_const.wx_id_any, @title, [{:size, size}])
+    frame = :wxFrame.new(wx, :wx_const.id_any, @title, [{:size, size}])
     :wxWindow.connect(frame, :close_window)
     :wxFrame.show(frame)
 
-    gl_attrib = [{:attribList, [:wx_const.wx_gl_rgba,
-                                :wx_const.wx_gl_doublebuffer,
-                                :wx_const.wx_gl_min_red, 8,
-                                :wx_const.wx_gl_min_green, 8,
-                                :wx_const.wx_gl_min_blue, 8,
-                                :wx_const.wx_gl_depth_size, 24, 0]}]
+    gl_attrib = [{:attribList, [:wx_const.gl_rgba,
+                                :wx_const.gl_doublebuffer,
+                                :wx_const.gl_min_red, 8,
+                                :wx_const.gl_min_green, 8,
+                                :wx_const.gl_min_blue, 8,
+                                :wx_const.gl_depth_size, 24, 0]}]
     canvas = :wxGLCanvas.new(frame, [size: size] ++ gl_attrib)
     ctx = :wxGLContext.new(canvas)
 
@@ -68,7 +68,7 @@ defmodule Minarai do
     :wxFrame.connect(canvas, :key_up)
     setup_gl(canvas)
     buffer = generate_binary()
-    :gl.enable(:gl_const.gl_texture_2d)
+    :gl.enable(:gl_const.texture_2d)
     texture = load_texture(buffer)
 
     keys = %{start: false, select: false, b: false, a: false, down: false, up: false, left: false, right: false}
@@ -118,7 +118,6 @@ defmodule Minarai do
   end
 
   def handle_info(:stop, state) do
-    # :timer.cancel(state.timer)
     :wxGLCanvas.destroy(state.canvas)
     {:stop, :normal, state}
   end
@@ -278,8 +277,6 @@ defmodule Minarai do
 
   def terminate(_reason, state) do
     :wxGLCanvas.destroy(state.canvas)
-    # :timer.cancel(state.timer)
-    # :timer.sleep(300)
   end
 
 
@@ -295,19 +292,19 @@ defmodule Minarai do
     [tex_id | _] = :gl.genTextures(1)
 
     # Send texture to gp
-    :gl.pixelStorei(:gl_const.gl_unpack_alignment, 1)
-    :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
+    :gl.pixelStorei(:gl_const.unpack_alignment, 1)
+    :gl.bindTexture(:gl_const.texture_2d, tex_id)
     # Configure texture
-    :gl.texParameteri(:gl_const.gl_texture_2d, :gl_const.gl_texutre_mag_filter, :gl_const.gl_nearest)
-    :gl.texParameteri(:gl_const.gl_texture_2d, :gl_const.gl_texutre_min_filter, :gl_const.gl_nearest)
-    :gl.texImage2D(:gl_const.gl_texture_2d,
+    :gl.texParameteri(:gl_const.texture_2d, :gl_const.texutre_mag_filter, :gl_const.nearest)
+    :gl.texParameteri(:gl_const.texture_2d, :gl_const.texutre_min_filter, :gl_const.nearest)
+    :gl.texImage2D(:gl_const.texture_2d,
       0,
-      :gl_const.gl_rgb,
+      :gl_const.rgb,
       @width,
       @height,
       0,
-      :gl_const.gl_rgb,
-      :gl_const.gl_unsigned_byte,
+      :gl_const.rgb,
+      :gl_const.unsigned_byte,
       buffer)
 
     w = power_of_two_roof(@width)
@@ -319,13 +316,13 @@ defmodule Minarai do
   defp setup_gl(win) do
     {w, h} = :wxWindow.getClientSize(win)
     resize_gl_scene(w, h)
-    #:gl.shadeModel(:gl_const.gl_smooth)
+    #:gl.shadeModel(:gl_const.smooth)
     :gl.clearColor(0.0, 0.0, 0.0, 0.0)
     # :gl.clearDepth(1.0)
-    # :gl.depthFunc(:gl_const.gl_lequal)
-    # :gl.enable(:gl_const.gl_depth_test)
-    # :gl.depthFunc(:gl_const.gl_lequal)
-    # :gl.hint(:gl_const.gl_perspective_correction_hint, :gl_const.gl_nicest)
+    # :gl.depthFunc(:gl_const.lequal)
+    # :gl.enable(:gl_const.depth_test)
+    # :gl.depthFunc(:gl_const.lequal)
+    # :gl.hint(:gl_const.perspective_correction_hint, :gl_const.nicest)
     setup_gl_2d(win)
     :ok
   end
@@ -335,16 +332,16 @@ defmodule Minarai do
 
     # Note, there may be other things you need to change,
     # depending on how you have your OpenGL state set up.
-    :gl.pushAttrib(:gl_const.gl_enable_bit)
-    :gl.disable(:gl_const.gl_depth_test)
-    :gl.disable(:gl_const.gl_cull_face)
-    :gl.enable(:gl_const.gl_texture_2d)
+    :gl.pushAttrib(:gl_const.enable_bit)
+    :gl.disable(:gl_const.depth_test)
+    :gl.disable(:gl_const.cull_face)
+    :gl.enable(:gl_const.texture_2d)
 
     # This allows alpha blending of 2D textures with the scene
     # gl:enable(?GL_BLEND),
     # gl:blendFunc(?GL_SRC_ALPHA, ?GL_ONE_MINUS_SRC_ALPHA),
 
-    :gl.matrixMode(:gl_const.gl_projection)
+    :gl.matrixMode(:gl_const.projection)
     :gl.pushMatrix()
     :gl.loadIdentity()
 
@@ -355,7 +352,7 @@ defmodule Minarai do
     # also work for mouse coordinates.
     :gl.ortho(0.0, w / 1, h / 1, 0.0, 0.0, 1.0)
 
-    :gl.matrixMode(:gl_const.gl_modelview)
+    :gl.matrixMode(:gl_const.modelview)
     :gl.pushMatrix()
     # :gl.loadIdentity()
     :ok
@@ -363,21 +360,21 @@ defmodule Minarai do
 
   defp resize_gl_scene(width, height) do
     :gl.viewport(0, 0, width, height)
-    :gl.matrixMode(:gl_const.gl_projection)
+    :gl.matrixMode(:gl_const.projection)
     :gl.loadIdentity()
     :gl.ortho(0.0, width / 1, height / 1, 0.0, 0.0, 1.0)
     # :glu.perspective(45.0, width / height, 0.1, 100.0)
-    :gl.matrixMode(:gl_const.gl_modelview)
+    :gl.matrixMode(:gl_const.modelview)
     :gl.loadIdentity()
     :ok
   end
 
   defp draw_texture(x, y, scale, %{tex_id: tex_id, w: w, h: h}) do
-    :gl.clear(Bitwise.bor(:gl_const.gl_color_buffer_bit, :gl_const.gl_depth_buffer_bit))
+    :gl.clear(Bitwise.bor(:gl_const.color_buffer_bit, :gl_const.depth_buffer_bit))
     :gl.loadIdentity()
-    :gl.bindTexture(:gl_const.gl_texture_2d, tex_id)
+    :gl.bindTexture(:gl_const.texture_2d, tex_id)
     :gl.scalef(scale / 0.5, scale / 0.5, 0.0)
-    :gl.begin(:gl_const.gl_triangle_strip)
+    :gl.begin(:gl_const.triangle_strip)
     :gl.texCoord2f(0.0, 0.0)
     :gl.vertex2i(x, y)
     :gl.texCoord2f(1.0, 0.0)
@@ -390,14 +387,17 @@ defmodule Minarai do
     :ok
   end
 
+  defp draw_buffer(scale, fbo_id, %{tex_id: tex_id, w: w, h: h}) do
+  end
+
 
   defp render(%{canvas: canvas, texture: texture, scale: scale, buffer: buffer} = _state) do
     # Update texture with new screen buffer
-    :gl.texSubImage2D(:gl_const.gl_texture_2d, 0,
+    :gl.texSubImage2D(:gl_const.texture_2d, 0,
       0, 0,
       @width, @height,
-      :gl_const.gl_rgb,
-      :gl_const.gl_unsigned_byte,
+      :gl_const.rgb,
+      :gl_const.unsigned_byte,
       buffer)
     draw_texture(0, 0, scale, texture)
     :wxGLCanvas.swapBuffers(canvas)

@@ -3,81 +3,86 @@
 
 -include_lib("wx/include/gl.hrl").
 
-gl_smooth() ->
+smooth() ->
   ?GL_SMOOTH.
 
-gl_enable_bit() ->
+enable_bit() ->
   ?GL_ENABLE_BIT.
 
-gl_cull_face() ->
+cull_face() ->
   ?GL_CULL_FACE.
 
-gl_blend() ->
+blend() ->
   ?GL_BLEND.
 
-gl_depth_test() ->
+depth_test() ->
   ?GL_DEPTH_TEST.
 
-gl_lequal() ->
+lequal() ->
   ?GL_LEQUAL.
 
-gl_perspective_correction_hint() ->
+perspective_correction_hint() ->
   ?GL_PERSPECTIVE_CORRECTION_HINT.
 
-gl_nicest() ->
+nicest() ->
   ?GL_NICEST.
 
-gl_color_buffer_bit() ->
+color_buffer_bit() ->
   ?GL_COLOR_BUFFER_BIT.
 
-gl_depth_buffer_bit() ->
+depth_buffer_bit() ->
   ?GL_DEPTH_BUFFER_BIT.
 
-gl_triangles() ->
+triangles() ->
   ?GL_TRIANGLES.
 
-gl_triangle_strip() ->
+triangle_strip() ->
   ?GL_TRIANGLE_STRIP.
 
-gl_polygon() ->
+polygon() ->
   ?GL_POLYGON.
 
-gl_projection() ->
+projection() ->
   ?GL_PROJECTION.
 
-gl_modelview() ->
+modelview() ->
   ?GL_MODELVIEW.
 
-gl_texture_2d() ->
+texture_2d() ->
   ?GL_TEXTURE_2D.
 
-gl_rgb() ->
+rgb() ->
   ?GL_RGB.
 
-gl_rgba() ->
+rgba() ->
   ?GL_RGBA.
 
-gl_unpack_alignment() ->
+unpack_alignment() ->
   ?GL_UNPACK_ALIGNMENT.
 
-gl_unsigned_byte() ->
+unsigned_byte() ->
   ?GL_UNSIGNED_BYTE.
 
-gl_texutre_mag_filter() ->
+texutre_mag_filter() ->
   ?GL_TEXTURE_MAG_FILTER.
 
-gl_texutre_min_filter() ->
+texutre_min_filter() ->
   ?GL_TEXTURE_MIN_FILTER.
 
-gl_texutre_wrap_s() ->
+texutre_wrap_s() ->
   ?GL_TEXTURE_WRAP_S.
 
-gl_texutre_wrap_t() ->
+texutre_wrap_t() ->
   ?GL_TEXTURE_WRAP_T.
 
-gl_nearest() ->
+nearest() ->
   ?GL_NEAREST.
 
-gl_repeat() ->
+repeat() ->
   ?GL_REPEAT.
 
+read_framebuffer() ->
+  ?GL_READ_FRAMEBUFFER.
+
+color_attachment0() ->
+  ?GL_COLOR_ATTACHMENT0.
