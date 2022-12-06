@@ -290,6 +290,7 @@ defmodule Minarai do
   defp load_texture(buffer) do
     # Generate texture id
     [tex_id | _] = :gl.genTextures(1)
+    [fbo_id | _] = :gl.genFramebuffers(1)
 
     # Send texture to gp
     :gl.pixelStorei(:gl_const.unpack_alignment, 1)
@@ -310,7 +311,7 @@ defmodule Minarai do
     w = power_of_two_roof(@width)
     h = power_of_two_roof(@height)
 
-    %{tex_id: tex_id, w: @width, h: @height, minx: 0.0, miny: 0.0, maxx: @width / w, maxy: @height / h}
+    %{tex_id: tex_id, w: @width, h: @height, minx: 0.0, miny: 0.0, maxx: @width / w, maxy: @height / h, fbo_id: fbo_id}
   end
   
   defp setup_gl(win) do
@@ -350,7 +351,8 @@ defmodule Minarai do
     # projection to correct this.  
     # Note: We could flip the texture/image itself, but this will
     # also work for mouse coordinates.
-    :gl.ortho(0.0, w / 1, h / 1, 0.0, 0.0, 1.0)
+    # :gl.ortho(0.0, w / 1, h / 1, 0.0, 0.0, 1.0)
+    :gl.ortho(0.0, w / 1, h / 1, 0.0, -1.0, 0.0)
 
     :gl.matrixMode(:gl_const.modelview)
     :gl.pushMatrix()
@@ -362,7 +364,8 @@ defmodule Minarai do
     :gl.viewport(0, 0, width, height)
     :gl.matrixMode(:gl_const.projection)
     :gl.loadIdentity()
-    :gl.ortho(0.0, width / 1, height / 1, 0.0, 0.0, 1.0)
+    # :gl.ortho(0.0, width / 1, height / 1, 0.0, 0.0, 1.0)
+    :gl.ortho(0.0, width / 1, height / 1, 0.0, -1.0, 0.0)
     # :glu.perspective(45.0, width / height, 0.1, 100.0)
     :gl.matrixMode(:gl_const.modelview)
     :gl.loadIdentity()
@@ -387,7 +390,15 @@ defmodule Minarai do
     :ok
   end
 
-  defp draw_buffer(scale, fbo_id, %{tex_id: tex_id, w: w, h: h}) do
+  defp draw_buffer(scale, %{tex_id: tex_id, w: w, h: h, fbo_id: fbo_id}) do
+    :gl.bindFramebuffer(:gl_const.read_framebuffer, fbo_id)
+    :gl.framebufferTexture2D(:gl_const.read_framebuffer, :gl_const.color_attachment0,
+      :gl_const.texture_2d, tex_id, 0)
+    :gl.blitFramebuffer(0, 0, w, h,
+      0, 0, w * scale, h * scale,
+      :gl_const.color_buffer_bit, :gl_const.nearest)
+    :gl.bindFramebuffer(:gl_const.read_framebuffer, 0)
+    :ok
   end
 
 
@@ -399,7 +410,8 @@ defmodule Minarai do
       :gl_const.rgb,
       :gl_const.unsigned_byte,
       buffer)
-    draw_texture(0, 0, scale, texture)
+    # draw_texture(0, 0, scale, texture)
+    draw_buffer(scale, texture)
     :wxGLCanvas.swapBuffers(canvas)
     :ok
   end
