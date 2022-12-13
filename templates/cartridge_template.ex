@@ -1,6 +1,5 @@
 defmodule Gameboy.Cartridge do
   import Bitwise
-  alias Gameboy.Cartridge
   alias Gameboy.Memory
   alias Gameboy.Utils
   alias Gameboy.TupleMemory
@@ -65,7 +64,7 @@ defmodule Gameboy.Cartridge do
     IO.puts("MBC type: #{@mbc_type}")
     IO.puts("Cartridge mbc: #{inspect(mbc)}")
     IO.puts("ROM banks: #{div(tuple_size(rom()), @bank_size)}")
-    %Cartridge{mbc: mbc, ram: ram}
+    {mbc, ram}
   end
 
   def set_rom(cart, _rom), do: cart
@@ -98,7 +97,7 @@ defmodule Gameboy.Cartridge do
         TupleMemory.read(rom(), addr)
       end
     :mbc1 ->
-      def read_rom_low(%{mbc: %{rom: {low_offset, _high_offset}}}, addr) do
+      def read_rom_low({%{rom: {low_offset, _high_offset}}, _ram}, addr) do
         TupleMemory.read(rom(), low_offset ||| (addr &&& @bank_mask))
       end
     :mbc3 ->
@@ -117,11 +116,11 @@ defmodule Gameboy.Cartridge do
         TupleMemory.read(rom(), addr)
       end
     :mbc1 ->
-      def read_rom_high(%{mbc: %{rom: {_low_offset, high_offset}}}, addr) do
+      def read_rom_high({%{rom: {_low_offset, high_offset}}, _ram}, addr) do
         TupleMemory.read(rom(), high_offset ||| (addr &&& @bank_mask))
       end
     :mbc3 ->
-      def read_rom_high(%{mbc: %{rom: offset}}, addr) do
+      def read_rom_high({%{rom: offset}, _ram}, addr) do
         TupleMemory.read(rom(), offset ||| (addr &&& @bank_mask))
       end
     _ ->
@@ -136,7 +135,7 @@ defmodule Gameboy.Cartridge do
         TupleMemory.read_binary(rom(), addr, len)
       end
     :mbc1 ->
-      def read_binary_rom_low(%{mbc: %{rom: {low_offset, _high_offset}}}, addr, len) do
+      def read_binary_rom_low({%{rom: {low_offset, _high_offset}}, _ram}, addr, len) do
         TupleMemory.read_binary(rom(), low_offset ||| (addr &&& @bank_mask), len)
       end
     :mbc3 ->
@@ -155,11 +154,11 @@ defmodule Gameboy.Cartridge do
         TupleMemory.read_binary(rom(), addr, len)
       end
     :mbc1 ->
-      def read_binary_rom_high(%{mbc: %{rom: {_low_offset, high_offset}}}, addr, len) do
+      def read_binary_rom_high({%{rom: {_low_offset, high_offset}}, _ram}, addr, len) do
         TupleMemory.read_binary(rom(), high_offset ||| (addr &&& @bank_mask), len)
       end
     :mbc3 ->
-      def read_binary_rom_high(%{mbc: %{rom: offset}}, addr, len) do
+      def read_binary_rom_high({%{rom: offset}, _ram}, addr, len) do
         TupleMemory.read_binary(rom(), offset ||| (addr &&& @bank_mask), len)
       end
     _ ->
@@ -170,57 +169,57 @@ defmodule Gameboy.Cartridge do
 
   case @mbc_type do
     :nombc ->
-      def read_ram(%{ram: ram}, addr) do
+      def read_ram({_mbc, ram}, addr) do
         RWMemory.read_array(ram, 0x0, addr &&& @bank_mask)
       end
     :mbc1 ->
-      def read_ram(%{mbc: %{ram: bank}, ram: ram}, addr) do
+      def read_ram({%{ram: bank}, ram}, addr) do
         RWMemory.read_array(ram, bank, addr &&& @bank_mask)
       end
     :mbc3 ->
-      def read_ram(%{mbc: %{ram: 0x08, rtc_s: value}}, _addr), do: value
-      def read_ram(%{mbc: %{ram: 0x09, rtc_m: value}}, _addr), do: value
-      def read_ram(%{mbc: %{ram: 0x0a, rtc_h: value}}, _addr), do: value
-      def read_ram(%{mbc: %{ram: 0x0b, rtc_dl: value}}, _addr), do: value
-      def read_ram(%{mbc: %{ram: 0x0c, rtc_dh: value}}, _addr), do: value
-      def read_ram(%{mbc: %{ram: bank}, ram: ram}, addr) do
+      def read_ram({%{ram: 0x08, rtc_s: value}, _ram}, _addr), do: value
+      def read_ram({%{ram: 0x09, rtc_m: value}, _ram}, _addr), do: value
+      def read_ram({%{ram: 0x0a, rtc_h: value}, _ram}, _addr), do: value
+      def read_ram({%{ram: 0x0b, rtc_dl: value}, _ram}, _addr), do: value
+      def read_ram({%{ram: 0x0c, rtc_dh: value}, _ram}, _addr), do: value
+      def read_ram({%{ram: bank}, ram}, addr) do
         RWMemory.read_array(ram, bank, addr &&& @bank_mask)
       end
   end
 
   case @mbc_type do
     :nombc ->
-      def write_ram(%{ram: ram} = cart, addr, value) do
+      def write_ram({_mbc, ram} = cart, addr, value) do
         # How to enable write with no mbc?
         # put_in(cart.ram.memory, Memory.write_array(ram.memory, 0x0, addr &&& @bank_mask, value))
         RWMemory.write_array(ram, 0x0, addr &&& @bank_mask, value)
         cart
       end
     :mbc1 ->
-      def write_ram(%{mbc: %{ram_enable: false}} = cart, _addr, _value), do: cart
-      def write_ram(%{mbc: %{ram_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
+      def write_ram({%{ram_enable: false}, _ram} = cart, _addr, _value), do: cart
+      def write_ram({%{ram_enable: true, ram: bank}, ram} = cart, addr, value) do
         # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
         RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
         cart
       end
     :mbc3 ->
-      def write_ram(%{mbc: %{ram_rtc_enable: false}} = cart, _addr, _value), do: cart
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: 0x08}} = cart, _addr, value) do
+      def write_ram({%{ram_rtc_enable: false}, _ram} = cart, _addr, _value), do: cart
+      def write_ram({%{ram_rtc_enable: true, ram: 0x08}, _ram} = cart, _addr, value) do
         put_in(cart.mbc.rtc_s, value)
       end
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: 0x09}} = cart, _addr, value) do
+      def write_ram({%{ram_rtc_enable: true, ram: 0x09}, _ram} = cart, _addr, value) do
         put_in(cart.mbc.rtc_m, value)
       end
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: 0x0a}} = cart, _addr, value) do
+      def write_ram({%{ram_rtc_enable: true, ram: 0x0a}, _ram} = cart, _addr, value) do
         put_in(cart.mbc.rtc_h, value)
       end
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: 0x0b}} = cart, _addr, value) do
+      def write_ram({%{ram_rtc_enable: true, ram: 0x0b}, _ram} = cart, _addr, value) do
         put_in(cart.mbc.rtc_dl, value)
       end
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: 0x0c}} = cart, _addr, value) do
+      def write_ram({%{ram_rtc_enable: true, ram: 0x0c}, _ram} = cart, _addr, value) do
         put_in(cart.mbc.rtc_dh, value)
       end
-      def write_ram(%{mbc: %{ram_rtc_enable: true, ram: bank}, ram: ram} = cart, addr, value) do
+      def write_ram({%{ram_rtc_enable: true, ram: bank}, ram} = cart, addr, value) do
         # put_in(cart.ram.memory, Memory.write_array(ram.memory, bank, addr &&& (ram.memory[0].size - 1), value))
         RWMemory.write_array(ram, bank, addr &&& @bank_mask, value)
         cart
@@ -231,7 +230,7 @@ defmodule Gameboy.Cartridge do
     :nombc ->
       def set_bank_control(cart, _addr, _value), do: cart
     :mbc1 ->
-      def set_bank_control(%{mbc: mbc} = cart, addr, value) do
+      def set_bank_control({mbc, ram} = cart, addr, value) do
         mbc = cond do
           addr <= 0x1fff -> # RAM enable
             # Any value with 0xa in lower 4 bit enables RAM
@@ -240,20 +239,20 @@ defmodule Gameboy.Cartridge do
             bank1 = value &&& @mbc1_bank1_mask
             # If writing 0x00 is attempted, make it 0x01
             bank1 = if bank1 == 0x00, do: 0x01, else: bank1
-            put_in(cart.mbc.bank1, bank1)
-            |> mbc1_set_bank()
+            Map.put(mbc, :bank1, bank1)
+            |> mbc1_set_bank(ram)
           addr <= 0x5fff -> # RAM bank number or upper bits of ROM bank number
-            put_in(cart.mbc.bank2, value &&& @mbc1_bank2_mask)
-            |> mbc1_set_bank()
+            Map.put(mbc, :bank2, value &&& @mbc1_bank2_mask)
+            |> mbc1_set_bank(ram)
           true -> # Banking mode select
             mode = if (value &&& @mbc1_mode_mask) != 0, do: :advance_rom_or_ram_bank, else: :simple_rom_bank
-            put_in(cart.mbc.mode, mode)
-            |> mbc1_set_bank()
+            Map.put(mbc, :mode, mode)
+            |> mbc1_set_bank(ram)
         end
-        Map.put(cart, :mbc, mbc)
+        {mbc, ram}
       end
     :mbc3 ->
-      def set_bank_control(%{mbc: mbc} = cart, addr, value) do
+      def set_bank_control({mbc, ram}, addr, value) do
         mbc = cond do
           addr <= 0x1fff -> # RAM enable
             # Any value with 0xa in lower 4 bit enables RAM & RTC registers
@@ -287,12 +286,12 @@ defmodule Gameboy.Cartridge do
                 Map.put(mbc, :latch_clock, nil)
             end
         end
-        Map.put(cart, :mbc, mbc)
+        {mbc, ram}
       end
   end
 
   if @mbc_type == :mbc1 do
-    defp mbc1_set_bank(%{mbc: %{mode: mode, bank1: bank1, bank2: bank2} = mbc, ram: ram} = _cart) do
+    defp mbc1_set_bank(%{mode: mode, bank1: bank1, bank2: bank2} = mbc, ram) do
       rom_high = (((bank2 <<< 5) ||| bank1) * 0x4000) &&& (tuple_size(rom()) - 1) 
       {rom_low, ram_bank} = if mode == :simple_rom_bank do
           # Only does regular rom banking
