@@ -275,7 +275,7 @@ defmodule Gameboy.RecordPpu do
   defp do_cycle(ppu(counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer) = p) do
     pixels = draw_scanline_now(p)
     req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
-    {ppu(p, mode: :hblank, counter: @hblank_cycles, buffer: IO.iodata_to_binary([buffer | pixels])), req}
+    {ppu(p, mode: :hblank, counter: @hblank_cycles, buffer: IO.iodata_to_binary([pixels | buffer])), req}
     # {ppu(p, mode: :hblank, counter: @hblank_cycles), req}
   end
   defp do_cycle(ppu(counter: _, mode: :hblank, lcds: lcds, ly: ly, lyc: lyc) = p) do
