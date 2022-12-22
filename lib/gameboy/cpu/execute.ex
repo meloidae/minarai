@@ -1,7 +1,8 @@
 defmodule Gameboy.Cpu.Execute do
   import Bitwise
   # alias Gameboy.Cpu
-  alias Gameboy.RecordCpu, as: Cpu
+  # alias Gameboy.RecordCpu, as: Cpu
+  alias Gameboy.SmallCpu, as: Cpu
   alias Gameboy.Hardware
   alias Gameboy.Utils
 

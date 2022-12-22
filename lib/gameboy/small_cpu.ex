@@ -1,46 +1,31 @@
-defmodule Gameboy.RecordCpu do
+defmodule Gameboy.SmallCpu do
   import Bitwise
   require Record
 
   alias Gameboy.Hardware
   alias Gameboy.Utils
-  alias Gameboy.Cpu.Disassemble
 
   Record.defrecordp(:cpu,
-                    a: 0x00,
-                    f: 0x00,
-                    b: 0x00,
-                    c: 0x00,
-                    d: 0x00,
-                    e: 0x00,
-                    h: 0x00,
-                    l: 0x00,
-                    pc: 0x0000,
-                    sp: 0x0000,
+                    afbc: 0x00,
+                    dehl: 0x00,
+                    sppc: 0x00,
                     opcode: 0x0,
                     ime: false,
                     delayed_ime: nil, 
                     state: :running)
+
 
   def init do
     cpu()
   end
 
   # Fetch opcode for instruction and increment pc
-  def fetch_next(cp, hw, addr) do
+  def fetch_next(cpu(sppc: reg) = cp, hw, addr) do
     {opcode, hw} = Hardware.synced_read(hw, addr)
     if :persistent_term.get({Minarai, :count_fn_calls}, false) do
       Utils.update_counter(Disassemble.disassemble(opcode, cp, hw))
     end
-    {cpu(cp, opcode: opcode, pc: (addr + 1) &&& 0xffff), hw}
-  end
-
-  def fetch_next(counter, cp, hw, addr, next_fn) do
-    {opcode, hw} = Hardware.synced_read(hw, addr)
-    if :persistent_term.get({Minarai, :count_fn_calls}, false) do
-      Utils.update_counter(Disassemble.disassemble(opcode, cp, hw))
-    end
-    next_fn.(counter, cpu(cp, opcode: opcode, pc: (addr + 1) &&& 0xffff), hw)
+    {cpu(cp, opcode: opcode, sppc: (reg &&& 0xffff_0000) ||| ((addr + 1) &&& 0xffff)), hw}
   end
 
   # Handle interrupt
@@ -50,9 +35,11 @@ defmodule Gameboy.RecordCpu do
         # No interrupt is requested
         {cp, hw}
       {addr, mask} ->
-        cpu(ime: ime, pc: pc, sp: sp, state: state) = cp
+        cpu(ime: ime, sppc: sppc, state: state) = cp
         cond do
           ime -> # ime is enabled
+            pc = sppc &&& 0x0000_ffff
+            sp = (sppc &&& 0xffff_0000) >>> 16
             # Add 8 cycles
             hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
             # Push value of pc on to stack
@@ -65,7 +52,7 @@ defmodule Gameboy.RecordCpu do
             # Acknowledge interrupt
             hw = Hardware.acknowledge_interrupt(hw, mask)
             # Change pc to address specified by interrupt and switch to running state
-            {cpu(cp, pc: addr, sp: sp, state: :running, ime: false), hw}
+            {cpu(cp, sppc: (sp <<< 16) ||| addr, state: :running, ime: false), hw}
           state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
             {cpu(cp, state: :running), hw}
@@ -76,75 +63,74 @@ defmodule Gameboy.RecordCpu do
     end
   end
 
-  def handle_interrupt(counter, cp, hw, next_fn) do
-    case Hardware.check_interrupt(hw) do
-      nil ->
-        # No interrupt is requested
-        next_fn.(counter, cp, hw)
-      {addr, mask} ->
-        cpu(ime: ime, pc: pc, sp: sp, state: state) = cp
-        cond do
-          ime -> # ime is enabled
-            # Add 8 cycles
-            hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
-            # Push value of pc on to stack
-            low = pc &&& 0xff
-            high = pc >>> 8
-            sp = (sp - 1) &&& 0xffff
-            hw = Hardware.synced_write(hw, sp, high)
-            sp = (sp - 1) &&& 0xffff
-            hw = Hardware.synced_write(hw, sp, low)
-            # Acknowledge interrupt
-            hw = Hardware.acknowledge_interrupt(hw, mask)
-            # Change pc to address specified by interrupt and switch to running state
-            next_fn.(counter, cpu(cp, pc: addr, sp: sp, state: :running, ime: false), hw)
-          state != :haltbug ->
-            # When ime is disabled, resume from halt without acknowledging interrupts
-            next_fn.(counter, cpu(cp, state: :running), hw)
-          true ->
-            # halt bug
-            next_fn.(counter, cp, hw)
-        end
-    end
-  end
-
   # 16-bit reads from a register
   @compile {:inline, read_register: 2}
-  def read_register(cpu(a: a, f: f), :af), do: (a <<< 8) ||| f
-  def read_register(cpu(b: b, c: c), :bc), do: (b <<< 8) ||| c
-  def read_register(cpu(d: d, e: e), :de), do: (d <<< 8) ||| e
-  def read_register(cpu(h: h, l: l), :hl), do: (h <<< 8) ||| l
-  def read_register(cpu(pc: pc), :pc), do: pc
-  def read_register(cpu(sp: sp), :sp), do: sp
+  def read_register(cpu(afbc: reg), :af), do: (reg &&& 0xffff_0000) >>> 16
+  def read_register(cpu(afbc: reg), :bc), do: reg &&& 0x0000_ffff
+  def read_register(cpu(dehl: reg), :de), do: (reg &&& 0xffff_0000) >>> 16
+  def read_register(cpu(dehl: reg), :hl), do: reg &&& 0x0000_ffff
+  def read_register(cpu(sppc: reg), :sp), do: (reg &&& 0xffff_0000) >>> 16
+  def read_register(cpu(sppc: reg), :pc), do: reg &&& 0x0000_ffff
 
   # 8 bit reads from a register
-  def read_register(cpu(a: a), :a), do: a
-  def read_register(cpu(f: f), :f), do: f
-  def read_register(cpu(b: b), :b), do: b
-  def read_register(cpu(c: c), :c), do: c
-  def read_register(cpu(d: d), :d), do: d
-  def read_register(cpu(e: e), :e), do: e
-  def read_register(cpu(h: h), :h), do: h
-  def read_register(cpu(l: l), :l), do: l
+  def read_register(cpu(afbc: reg), :a), do: (reg &&& 0xff00_0000) >>> 24
+  def read_register(cpu(afbc: reg), :f), do: (reg &&& 0x00ff_0000) >>> 16
+  def read_register(cpu(afbc: reg), :b), do: (reg &&& 0x0000_ff00) >>> 8
+  def read_register(cpu(afbc: reg), :c), do: reg &&& 0x0000_00ff
+  def read_register(cpu(dehl: reg), :d), do: (reg &&& 0xff00_0000) >>> 24
+  def read_register(cpu(dehl: reg), :e), do: (reg &&& 0x00ff_0000) >>> 16
+  def read_register(cpu(dehl: reg), :h), do: (reg &&& 0x0000_ff00) >>> 8
+  def read_register(cpu(dehl: reg), :l), do: reg &&& 0x0000_00ff
 
   # 16-bit writes to a register
   @compile {:inline, write_register: 3}
-  def write_register(cp, :af, data), do: cpu(cp, a: (data >>> 8) &&& 0xff, f: data &&& 0xf0)  # lower nibble of f is always zero
-  def write_register(cp, :bc, data), do: cpu(cp, b: (data >>> 8) &&& 0xff, c: data &&& 0xff)
-  def write_register(cp, :de, data), do: cpu(cp, d: (data >>> 8) &&& 0xff, e: data &&& 0xff)
-  def write_register(cp, :hl, data), do: cpu(cp, h: (data >>> 8) &&& 0xff, l: data &&& 0xff)
-  def write_register(cp, :pc, data), do: cpu(cp, pc: data)
-  def write_register(cp, :sp, data), do: cpu(cp, sp: data)
+  def write_register(cpu(afbc: reg) = cp, :af, data) do
+    # lower nibble of f is always zero
+    cpu(cp, afbc: (reg &&& 0x0000_ffff) ||| ((data &&& 0xfff0) <<< 16))
+  end
+  def write_register(cpu(afbc: reg) = cp, :bc, data) do
+    cpu(cp, afbc: (reg &&& 0xffff_0000) ||| (data &&& 0xffff))
+  end
+  def write_register(cpu(dehl: reg) = cp, :de, data) do
+    cpu(cp, dehl: (reg &&& 0x0000_ffff) ||| ((data &&& 0xffff) <<< 16))
+  end
+  def write_register(cpu(dehl: reg) = cp, :hl, data) do
+    cpu(cp, dehl: (reg &&& 0xffff_0000) ||| (data &&& 0xffff))
+  end
+  def write_register(cpu(sppc: reg) = cp, :sp, data) do
+    cpu(cp, sppc: (reg &&& 0x0000_ffff) ||| ((data &&& 0xffff) <<< 16))
+  end
+  def write_register(cpu(sppc: reg) = cp, :pc, data) do
+    cpu(cp, sppc: (reg &&& 0xffff_0000) ||| (data &&& 0xffff))
+  end
 
   # 8-bit writes to a register
-  def write_register(cp, :a, data), do: cpu(cp, a: data)
-  def write_register(cp, :f, data), do: cpu(cp, f: data &&& 0xf0)  # Lower nibble is always zero
-  def write_register(cp, :b, data), do: cpu(cp, b: data)
-  def write_register(cp, :c, data), do: cpu(cp, c: data)
-  def write_register(cp, :d, data), do: cpu(cp, d: data)
-  def write_register(cp, :e, data), do: cpu(cp, e: data)
-  def write_register(cp, :h, data), do: cpu(cp, h: data)
-  def write_register(cp, :l, data), do: cpu(cp, l: data)
+  def write_register(cpu(afbc: reg) = cp, :a, data) do
+    cpu(cp, afbc: (reg &&& 0x00ff_ffff) ||| (data <<< 24))
+  end
+  def write_register(cpu(afbc: reg) = cp, :f, data) do
+    # Lower nibble is always zero
+    cpu(cp, afbc: (reg &&& 0xff00_ffff) ||| ((data &&& 0xf0) <<< 16))
+  end
+  def write_register(cpu(afbc: reg) = cp, :b, data) do
+    cpu(cp, afbc: (reg &&& 0xffff_00ff) ||| (data <<< 8))
+  end
+  def write_register(cpu(afbc: reg) = cp, :c, data) do
+    cpu(cp, afbc: (reg &&& 0xffff_ff00) ||| data)
+  end
+  def write_register(cpu(dehl: reg) = cp, :d, data) do
+    cpu(cp, dehl: (reg &&& 0x00ff_ffff) ||| (data <<< 24))
+  end
+  def write_register(cpu(dehl: reg) = cp, :e, data) do
+    # Lower nibble is always zero
+    cpu(cp, dehl: (reg &&& 0xff00_ffff) ||| (data <<< 16))
+  end
+  def write_register(cpu(dehl: reg) = cp, :h, data) do
+    cpu(cp, dehl: (reg &&& 0xffff_00ff) ||| (data <<< 8))
+  end
+  def write_register(cpu(dehl: reg) = cp, :l, data) do
+    cpu(cp, dehl: (reg &&& 0xffff_ff00) ||| data)
+  end
 
   # Set all flags at once
   for z <- [true, false] do
@@ -156,17 +142,20 @@ defmodule Gameboy.RecordCpu do
           h_val = if h, do: 1 <<< 5, else: 0
           c_val = if c, do: 1 <<< 4, else: 0
           f_val = bor(z_val, n_val) |> bor(h_val) |> bor(c_val)
-          def set_all_flags(cp, unquote(z), unquote(n), unquote(h), unquote(c)) do
-            cpu(cp, f: unquote(f_val))
+          f_val = f_val <<< 16
+          def set_all_flags(cpu(afbc: reg) = cp, unquote(z), unquote(n), unquote(h), unquote(c)) do
+            cpu(cp, afbc: (reg &&& 0xff00_ffff) ||| unquote(f_val))
           end
         end
       end
     end
   end
 
+
   # Set one or more flags at once
-  def set_flags(cpu(f: f) = cp, flags) do
-    cpu(cp, f: compute_flags(flags, f))
+  def set_flags(cpu(afbc: reg) = cp, flags) do
+    f = (reg &&& 0x00ff_0000) >>> 16
+    cpu(cp, afbc: (reg &&& 0xff00_ffff) ||| (compute_flags(flags, f) <<< 16))
   end
   defp compute_flags([], value), do: value
   defp compute_flags([{:z, true} | t], value), do: compute_flags(t, value ||| 0x80)
@@ -180,20 +169,19 @@ defmodule Gameboy.RecordCpu do
 
   # Get flag
   @z_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
-  def flag(cpu(f: f), :z), do: elem(@z_table, f)
+  def flag(cpu(afbc: reg), :z), do: elem(@z_table, (reg &&& 0x00ff_0000) >>> 16)
   @n_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end) |> List.to_tuple()
-  def flag(cpu(f: f), :n), do: elem(@n_table, f)
+  def flag(cpu(afbc: reg), :n), do: elem(@n_table, (reg &&& 0x00ff_0000) >>> 16)
   @h_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
-  def flag(cpu(f: f), :h), do: elem(@h_table, f)
+  def flag(cpu(afbc: reg), :h), do: elem(@h_table, (reg &&& 0x00ff_0000) >>> 16)
   @c_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end) |> List.to_tuple()
-  def flag(cpu(f: f), :c), do: elem(@c_table, f)
+  def flag(cpu(afbc: reg), :c), do: elem(@c_table, (reg &&& 0x00ff_0000) >>> 16)
 
   # Check flag based on condition code
-  def check_condition(cp, :nz), do: !flag(cp, :z)
+  def check_condition(cp, :nz), do: not flag(cp, :z)
   def check_condition(cp, :z), do: flag(cp, :z)
-  def check_condition(cp, :nc), do: !flag(cp, :c)
+  def check_condition(cp, :nc), do: not flag(cp, :c)
   def check_condition(cp, :c), do: flag(cp, :c)
-
 
   # Add two u16 values, then get carries from bit 7 (carry) and bit 3 (half carry)
   # Note that the result is the sum of a + SIGNED b
@@ -350,9 +338,10 @@ defmodule Gameboy.RecordCpu do
   def srl_u8_byte_carry(value, _cp), do: srl_u8_byte_carry(value)
 
   # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
-  def fetch_imm8(cpu(pc: addr) = cp, hw) do
+  def fetch_imm8(cpu(sppc: reg) = cp, hw) do
+    addr = 0x0000_ffff &&& reg
     {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu(cp, pc: (addr + 1) &&& 0xffff), hw}
+    {value, cpu(cp, sppc: (reg &&& 0xffff_0000) ||| ((addr + 1) &&& 0xffff)), hw}
   end
 
   # Fetch 16 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
@@ -364,34 +353,36 @@ defmodule Gameboy.RecordCpu do
   end
 
   # Push 16 bit to value to stack
-  def push_u16(cpu(sp: sp) = cp, hw, data) do
+  def push_u16(cpu(sppc: reg) = cp, hw, data) do
+    sp = (reg &&& 0xffff_0000) >>> 16
     low = data &&& 0xff
     high = (data >>> 8) &&& 0xff
     sp = (sp - 1) &&& 0xffff
     hw = Hardware.synced_write(hw, sp, high)
     sp = (sp - 1) &&& 0xffff
     hw = Hardware.synced_write(hw, sp, low)
-    {cpu(cp, sp: sp), hw}
+    {cpu(cp, sppc: (reg &&& 0x0000_ffff) ||| (sp <<< 16)), hw}
   end
 
   # Pop 16 bit value from stack
-  def pop_u16(cpu(sp: sp) = cp, hw) do
+  def pop_u16(cpu(sppc: reg) = cp, hw) do
+    sp = (reg &&& 0xffff_0000) >>> 16
     {low, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
     {high, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
-    {(high <<< 8) ||| low, cpu(cp, sp: sp), hw}
+    {(high <<< 8) ||| low, cpu(cp, sppc: (reg &&& 0x0000_ffff) ||| (sp <<< 16)), hw}
   end
 
   # Read for a single register
-  def read(cp, :a, hw), do: {cpu(cp, :a), cp, hw}
-  def read(cp, :f, hw), do: {cpu(cp, :f), cp, hw}
-  def read(cp, :b, hw), do: {cpu(cp, :b), cp, hw}
-  def read(cp, :c, hw), do: {cpu(cp, :c), cp, hw}
-  def read(cp, :d, hw), do: {cpu(cp, :d), cp, hw}
-  def read(cp, :e, hw), do: {cpu(cp, :e), cp, hw}
-  def read(cp, :h, hw), do: {cpu(cp, :h), cp, hw}
-  def read(cp, :l, hw), do: {cpu(cp, :l), cp, hw}
+  def read(cp, :a, hw), do: {read_register(cp, :a), cp, hw}
+  def read(cp, :f, hw), do: {read_register(cp, :f), cp, hw}
+  def read(cp, :b, hw), do: {read_register(cp, :b), cp, hw}
+  def read(cp, :c, hw), do: {read_register(cp, :c), cp, hw}
+  def read(cp, :d, hw), do: {read_register(cp, :d), cp, hw}
+  def read(cp, :e, hw), do: {read_register(cp, :e), cp, hw}
+  def read(cp, :h, hw), do: {read_register(cp, :h), cp, hw}
+  def read(cp, :l, hw), do: {read_register(cp, :l), cp, hw}
 
   # Read for an 8-bit immediate value (no write)
   def read(cp, :imm, hw), do: fetch_imm8(cp, hw)
@@ -437,22 +428,21 @@ defmodule Gameboy.RecordCpu do
 
   # Read from high address but address is taken from c
   def read(cp, :hic, hw) do
-    addr = cpu(cp, :c)
+    addr = read_register(cp, :c)
     addr = 0xff00 ||| addr
     {value, hw} = Hardware.synced_read(hw, addr)
     {value, cp, hw}
   end
 
   # Write to a single register
-  def write(cp, :a, hw, data), do: {cpu(cp, a: data), hw}
-  # Lower nibble of f is always zero
-  def write(cp, :f, hw, data), do: {cpu(cp, f: data &&& 0xf0), hw}
-  def write(cp, :b, hw, data), do: {cpu(cp, b: data), hw}
-  def write(cp, :c, hw, data), do: {cpu(cp, c: data), hw}
-  def write(cp, :d, hw, data), do: {cpu(cp, d: data), hw}
-  def write(cp, :e, hw, data), do: {cpu(cp, e: data), hw}
-  def write(cp, :h, hw, data), do: {cpu(cp, h: data), hw}
-  def write(cp, :l, hw, data), do: {cpu(cp, l: data), hw}
+  def write(cp, :a, hw, data), do: {write_register(cp, :a, data), hw}
+  def write(cp, :f, hw, data), do: {write_register(cp, :f, data), hw}
+  def write(cp, :b, hw, data), do: {write_register(cp, :b, data), hw}
+  def write(cp, :c, hw, data), do: {write_register(cp, :c, data), hw}
+  def write(cp, :d, hw, data), do: {write_register(cp, :d, data), hw}
+  def write(cp, :e, hw, data), do: {write_register(cp, :e, data), hw}
+  def write(cp, :h, hw, data), do: {write_register(cp, :h, data), hw}
+  def write(cp, :l, hw, data), do: {write_register(cp, :l, data), hw}
 
   # Write to addr (16 bit registers or immediate address)
   for reg <- [:bc, :de, :hl] do
@@ -489,15 +479,15 @@ defmodule Gameboy.RecordCpu do
 
   # Write to high address but address is taken from c
   def write(cp, :hic, hw, data) do
-    addr = cpu(cp, :c)
+    addr = read_register(cp, :c)
     addr = 0xff00 ||| addr
     {cp, Hardware.synced_write(hw, addr, data)}
   end
 
   # Update pc and enable interrupt immediately (used for RETI instruction)
   @compile {:inline, return_from_interrupt: 2}
-  def return_from_interrupt(cp, ret_addr) do
-    cpu(cp, pc: ret_addr, ime: true)
+  def return_from_interrupt(cpu(sppc: reg) = cp, ret_addr) do
+    cpu(cp, sppc: (reg &&& 0xffff_0000) ||| ret_addr, ime: true)
   end
 
   @compile {:inline, set_ime: 2, ime: 1, apply_delayed_ime: 2}
@@ -516,4 +506,14 @@ defmodule Gameboy.RecordCpu do
 
   @compile {:inline, opcode: 1}
   def opcode(cp), do: cpu(cp, :opcode)
+
+  @compile {:inline, post_interrupt: 3}
+  def post_interrupt(cp, sp, pc) do
+    cpu(cp, sppc: (sp <<< 16) ||| pc, state: :running, ime: false)
+  end
+
+  @compile{:inline, post_fetch: 3}
+  def post_fetch(cpu(sppc: reg) = cp, pc, opcode) do
+    cpu(cp, opcode: opcode, sppc: (reg &&& 0xffff_0000) ||| ((pc + 1) &&& 0xffff))
+  end
 end
