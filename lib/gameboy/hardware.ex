@@ -378,9 +378,6 @@ defmodule Gameboy.Hardware do
         end
       high <= 0xbf ->
         defp _write(hw, addr, value, unquote(high)) do
-          if :persistent_term.get({Minarai, :count_fn_calls}, false) do
-            IO.puts("Cartridge.write_ram()")
-          end
           hw = cycle(hw)
           hardware(hw, cart: Cartridge.write_ram(hardware(hw, :cart), addr, value))
         end
@@ -475,9 +472,6 @@ defmodule Gameboy.Hardware do
       0x45 ->
         memory_cycle(hw, fn hw -> hardware(hw, ppu: Ppu.set_line_y_compare(hardware(hw, :ppu), value)) end)
       0x46 ->
-        if :persistent_term.get({Minarai, :count_fn_calls}, false) do
-          IO.puts("Dma.request()")
-        end
         memory_cycle(hw, fn hw -> hardware(hw, dma: Dma.request(hardware(hw, :dma), value)) end)
       0x47 ->
         memory_cycle(hw, fn hw -> hardware(hw, ppu: Ppu.set_bg_palette(hardware(hw, :ppu), value)) end)
@@ -496,9 +490,6 @@ defmodule Gameboy.Hardware do
           hardware(hw, intr: Interrupts.set_interrupt_enable(hardware(hw, :intr), value))
         end)
       x when 0x80 <= x and x <= 0xfe ->
-        if :persistent_term.get({Minarai, :count_fn_calls}, false) do
-          IO.puts("Hram.write()")
-        end
         # memory_cycle(hw, fn hw -> Map.put(hw, :hram, Hram.write(hw.hram, addr, value)) end)
         hw = cycle(hw)
         Hram.write(hardware(hw, :hram), addr, value)
