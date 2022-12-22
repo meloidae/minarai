@@ -28,10 +28,10 @@ defmodule Gameboy do
   end
 
   def step({cpu, hw} = gb) do
-    {cpu, hw} = receive do
+    hw = receive do
       {:save, path} ->
         save_state(gb, path)
-        gb
+        hw
       {:load, path} ->
         load_state(path)
       {:save_latency, path} ->
@@ -40,52 +40,29 @@ defmodule Gameboy do
         else
           IO.puts("--record_stats option is not enabled")
         end
-        gb
+        hw
       {:key_down, key_name} ->
-        hw = Hardware.keydown(hw, key_name)
-        {cpu, hw}
+        Hardware.keydown(hw, key_name)
       {:key_up, key_name} ->
-        hw = Hardware.keyup(hw, key_name)
-        {cpu, hw}
+        Hardware.keyup(hw, key_name)
+      _ ->
+        hw
     after
       0 ->
-        gb
+        hw
     end
-    # if :persistent_term.get({Minarai, :print_count}, false) do
-    #   IO.puts("count: #{hw.counter}")
-    #   :persistent_term.put({Minarai, :print_count}, false)
-    # end
     cpu_step(cpu, hw)
-    # {cpu, hw} = handle_interrupt(cpu, hw)
-    # %{pc: pc, state: state} = cpu
-    # case state do
-    #   :running ->
-    #     {cpu, hw} = fetch_next(cpu, hw, pc)
-    #     decode_exec(cpu, hw)
-    #   :haltbug ->
-    #     # Halt bug. Fetch but don't increment pc
-    #     {cpu, hw} = fetch_next(cpu, hw, pc)
-    #     cpu = %{cpu | pc: pc, state: :running}
-    #     decode_exec(cpu, hw)
-    #   :halt ->
-    #     # IO.puts("Halt")
-    #     {cpu, Hardware.sync_cycle(hw)}
-    #   _ -> # stop?
-    #     # IO.puts("stop")
-    #     # gb
-    #     {cpu, hw}
-    # end
   end
 
-  def start(opts \\ []) do
-    gb = Gameboy.init(opts)
-    loop(gb)
-  end
+  # def start(opts \\ []) do
+  #   gb = Gameboy.init(opts)
+  #   loop(gb)
+  # end
 
-  def run({cpu, hw}) do
-    loop({cpu, hw})
-  end
-  defp loop(gb), do: loop(Gameboy.step(gb))
+  # def run({cpu, hw}) do
+  #   loop({cpu, hw})
+  # end
+  # defp loop(gb), do: loop(Gameboy.step(gb))
 
   @counter_limit 17556 * 200
   def start_chain(gb) do
