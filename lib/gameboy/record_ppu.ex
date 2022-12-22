@@ -21,7 +21,6 @@ defmodule Gameboy.RecordPpu do
                     vram: nil,
                     oam: struct(Memory),
                     mode: :oam_search,
-                    counter: @oam_search_cycles,
                     x: 0,
                     lcdc: 0x00,
                     lcds: 0x00,
@@ -35,7 +34,6 @@ defmodule Gameboy.RecordPpu do
                     obp0: 0x00,
                     obp1: 0x00,
                     buffer: [])
-                    # scanline_args: nil)
 
   @display_enable 0..0xff |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
   @window_tile_map_addr 0..0xff |> Enum.map(fn x ->
@@ -141,17 +139,10 @@ defmodule Gameboy.RecordPpu do
   def init do
     vram = RWMemory.init(@vram_size, :vram)
     oam = Memory.init(@oam_size)
-    ppu(
-      vram: vram,
-      oam: oam
-    )
+    {ppu(vram: vram, oam: oam), @oam_search_cycles}
   end
 
-  # def init_scanline_args do
-  #   :ets.new(:scanline_args, [:set, :public, :named_table])
-  # end
-
-  def read_oam(ppu(mode: mode, oam: oam) = _p, addr) do
+  def read_oam({ppu(mode: mode, oam: oam), _counter} = _pt, addr) do
     # oam is not accessible during pixel transfer & oam search
     if mode == :pixel_transfer or mode == :oam_search do
       0xff
@@ -160,12 +151,12 @@ defmodule Gameboy.RecordPpu do
     end
   end
 
-  def write_oam(ppu(mode: mode, oam: oam) = p, addr, value) do
+  def write_oam({ppu(mode: mode, oam: oam) = p, counter} = pt, addr, value) do
     # oam is not accessible during pixel transfer & oam search
     if mode == :pixel_transfer or mode == :oam_search do
-      p
+      pt
     else
-      ppu(p, oam: Memory.write(oam, addr, value))
+      {ppu(p, oam: Memory.write(oam, addr, value)), counter}
     end
   end
 
@@ -173,7 +164,7 @@ defmodule Gameboy.RecordPpu do
     ppu(p, oam: Memory.write_binary(oam, addr, value, len))
   end
 
-  def read_vram(ppu(mode: mode, vram: vram) = _p, addr) do
+  def read_vram({ppu(mode: mode, vram: vram), _counter} = _pt, addr) do
     if mode == :pixel_transfer do
       # vram is not accessible during pixel transfer (mode 3)
       0xff
@@ -182,11 +173,11 @@ defmodule Gameboy.RecordPpu do
     end
   end
 
-  def read_binary_vram(ppu(vram: vram) = _p, addr, len) do
+  def read_binary_vram({ppu(vram: vram), _counter} = _pt, addr, len) do
     RWMemory.read_binary(vram, addr &&& @vram_mask, len)
   end
 
-  def write_vram(ppu(mode: mode, vram: vram) = p, addr, value) do
+  def write_vram({ppu(mode: mode, vram: vram), _counter} = p, addr, value) do
     if mode != :pixel_transfer do
       # vram is only accessible when not in pixel transfer (mode 3)
       RWMemory.write(vram, addr &&& @vram_mask, value)
@@ -194,11 +185,11 @@ defmodule Gameboy.RecordPpu do
     p
   end
 
-  def lcd_control(ppu(lcdc: lcdc) = _p), do: lcdc
+  def lcd_control({ppu(lcdc: lcdc), _counter} = _pt), do: lcdc
 
-  def set_lcd_control(p, value), do: ppu(p, lcdc: value &&& 0xff)
+  def set_lcd_control({p, counter}, value), do: {ppu(p, lcdc: value &&& 0xff), counter}
 
-  def lcd_status(ppu(mode: :hblank, ly: ly, lyc: lyc, lcds: lcds) = _p) do
+  def lcd_status({ppu(mode: :hblank, ly: ly, lyc: lyc, lcds: lcds), _counter} = _p) do
     if ly === lyc do
       lcds ||| 0b100
     else
@@ -206,21 +197,21 @@ defmodule Gameboy.RecordPpu do
       lcds
     end
   end
-  def lcd_status(ppu(mode: :vblank, ly: ly, lyc: lyc, lcds: lcds) = _p) do
+  def lcd_status({ppu(mode: :vblank, ly: ly, lyc: lyc, lcds: lcds), _counter} = _p) do
     if ly === lyc do
       lcds ||| 0b101
     else
       lcds ||| 0b001
     end
   end
-  def lcd_status(ppu(mode: :oam_search, ly: ly, lyc: lyc, lcds: lcds) = _p) do
+  def lcd_status({ppu(mode: :oam_search, ly: ly, lyc: lyc, lcds: lcds), _counter} = _p) do
     if ly === lyc do
       lcds ||| 0b110
     else
       lcds ||| 0b010
     end
   end
-  def lcd_status(ppu(mode: :pixel_transfer, ly: ly, lyc: lyc, lcds: lcds) = _p) do
+  def lcd_status({ppu(mode: :pixel_transfer, ly: ly, lyc: lyc, lcds: lcds), _counter} = _p) do
     if ly === lyc do
       lcds ||| 0b111
     else
@@ -228,79 +219,79 @@ defmodule Gameboy.RecordPpu do
     end
   end
 
-  def set_lcd_status(p, value) do
+  def set_lcd_status({p, counter}, value) do
     # Only bit 3-6 are writable
-    ppu(p, lcds: value &&& 0b0111_1000)
+    {ppu(p, lcds: value &&& 0b0111_1000), counter}
   end
 
-  def bg_palette(ppu(bgp: bgp) = _p), do: bgp
-  def set_bg_palette(p, value), do: ppu(p, bgp: value &&& 0xff)
+  def bg_palette({ppu(bgp: bgp), _counter} = _p), do: bgp
+  def set_bg_palette({p, counter}, value), do: {ppu(p, bgp: value &&& 0xff), counter}
 
-  def ob_palette0(ppu(obp0: obp0) = _p), do: obp0
-  def set_ob_palette0(p, value), do: ppu(p, obp0: value)
-  def ob_palette1(ppu(obp1: obp1) = _p), do: obp1
-  def set_ob_palette1(p, value), do: ppu(p, obp1: value)
+  def ob_palette0({ppu(obp0: obp0), _counter} = _p), do: obp0
+  def set_ob_palette0({p, counter}, value), do: {ppu(p, obp0: value), counter}
+  def ob_palette1({ppu(obp1: obp1), _counter} = _p), do: obp1
+  def set_ob_palette1({p, counter}, value), do: {ppu(p, obp1: value), counter}
 
-  def scroll_y(ppu(scy: scy) = _p), do: scy
-  def set_scroll_y(p, value), do: ppu(p, scy: value &&& 0xff)
-  def scroll_x(ppu(scx: scx) = _p), do: scx
-  def set_scroll_x(p, value), do: ppu(p, scx: value &&& 0xff)
+  def scroll_y({ppu(scy: scy), _counter} = _p), do: scy
+  def set_scroll_y({p, counter}, value), do: {ppu(p, scy: value &&& 0xff), counter}
+  def scroll_x({ppu(scx: scx), _counter} = _p), do: scx
+  def set_scroll_x({p, counter}, value), do: {ppu(p, scx: value &&& 0xff), counter}
 
-  def line_y(ppu(ly: ly) = _p), do: ly
+  def line_y({ppu(ly: ly), _counter} = _p), do: ly
   # Return immediately because ly is read only
   def set_line_y(p, _), do: p
 
-  def line_y_compare(ppu(lyc: lyc) = _p), do: lyc
-  def set_line_y_compare(p, value), do: ppu(p, lyc: value &&& 0xff)
+  def line_y_compare({ppu(lyc: lyc), _counter} = _p), do: lyc
+  def set_line_y_compare({p, counter}, value), do: {ppu(p, lyc: value &&& 0xff), counter}
 
-  def window_x(ppu(wx: wx) = _p), do: wx
-  def set_window_x(p, value), do: ppu(p, wx: value &&& 0xff)
+  def window_x({ppu(wx: wx), _counter} = _p), do: wx
+  def set_window_x({p, counter}, value), do: {ppu(p, wx: value &&& 0xff), counter}
 
-  def window_y(ppu(wy: wy) = _p), do: wy
-  def set_window_y(p, value), do: ppu(p, wy: value &&& 0xff)
+  def window_y({ppu(wy: wy), _counter} = _p), do: wy
+  def set_window_y({p, counter}, value), do: {ppu(p, wy: value &&& 0xff), counter}
 
   # Instantaneous transfer for now
-  def oam_dma_transfer(p, data, size) do
-    write_binary_oam(p, 0x00, data, size)
+  def oam_dma_transfer({p, counter}, data, size) do
+    {write_binary_oam(p, 0x00, data, size), counter}
   end
 
-  def cycle(ppu(lcdc: lcdc) = p) do
-    if elem(@display_enable, lcdc), do: do_cycle(p), else: {p, 0}
+  def cycle({ppu(lcdc: lcdc) = p, counter} = pt) do
+    if elem(@display_enable, lcdc), do: do_cycle(p, counter), else: {pt, 0}
   end
 
-  defp do_cycle(ppu(counter: counter) = p) when counter > 1, do: {ppu(p, counter: counter - 1), 0}
-  defp do_cycle(ppu(counter: _, mode: :oam_search) = p) do
-    {ppu(p, mode: :pixel_transfer, counter: @pixel_transfer_cycles), 0}
+  defp do_cycle(p, counter) when counter > 1, do: {{p, counter - 1}, 0}
+  defp do_cycle(ppu(mode: :oam_search) = p, _counter) do
+    {{ppu(p, mode: :pixel_transfer), @pixel_transfer_cycles}, 0}
   end
-  defp do_cycle(ppu(counter: _, mode: :pixel_transfer, lcds: lcds, buffer: buffer) = p) do
+  defp do_cycle(ppu(mode: :pixel_transfer, lcds: lcds, buffer: buffer) = p, _counter) do
     pixels = draw_scanline_now(p)
     req = if elem(@hblank_stat, lcds), do: Interrupts.stat(), else: 0
-    {ppu(p, mode: :hblank, counter: @hblank_cycles, buffer: IO.iodata_to_binary([pixels | buffer])), req}
+    {{ppu(p, mode: :hblank, buffer: IO.iodata_to_binary([pixels | buffer])), @hblank_cycles}, req}
     # {ppu(p, mode: :hblank, counter: @hblank_cycles), req}
   end
-  defp do_cycle(ppu(counter: _, mode: :hblank, lcds: lcds, ly: ly, lyc: lyc) = p) do
+  defp do_cycle(ppu(mode: :hblank, lcds: lcds, ly: ly, lyc: lyc) = p, _counter) do
     new_ly = ly + 1
     if new_ly == 144 do
       req = Interrupts.vblank()
       req = if elem(@vblank_stat, lcds), do: Interrupts.stat() ||| req, else: req
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
       render(p)
-      {ppu(p, mode: :vblank, counter: @vblank_cycles, ly: new_ly, buffer: []), req}
+      {{ppu(p, mode: :vblank, ly: new_ly, buffer: []), @vblank_cycles}, req}
     else
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
-      {ppu(p, mode: :oam_search, counter: @oam_search_cycles, ly: new_ly), req}
+      {{ppu(p, mode: :oam_search, ly: new_ly), @oam_search_cycles}, req}
     end
   end
-  defp do_cycle(ppu(counter: _, mode: :vblank, lcds: lcds, ly: ly, lyc: lyc) = p) do
+  defp do_cycle(ppu(mode: :vblank, lcds: lcds, ly: ly, lyc: lyc) = p, _counter) do
     new_ly = ly + 1
     if new_ly == 153 do
       req = if elem(@oam_stat, lcds), do: Interrupts.stat(), else: 0
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat() ||| req, else: req
-      {ppu(p, mode: :oam_search, counter: @oam_search_cycles, ly: 0, buffer: []), req}
+      {{ppu(p, mode: :oam_search, ly: 0, buffer: []), @oam_search_cycles}, req}
     else
       req = if elem(@lyc_stat, lcds) and new_ly === lyc, do: Interrupts.stat(), else: 0
-      {ppu(p, counter: @vblank_cycles, ly: new_ly), req}
+      {{ppu(p, ly: new_ly), @vblank_cycles}, req}
     end
   end
 
@@ -363,26 +354,9 @@ defmodule Gameboy.RecordPpu do
     end)
   end
 
-  # defp put_args(ref, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
-  #   :ets.insert(ref, {ly, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1})
-  # end
-
-  # defp draw_scanline(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1, scanline_args: args) = _p) do
-  #   put_args(args, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
-  # end
-
   defp draw_scanline_now(ppu(oam: %{data: oam_data}, vram: vram, lcdc: lcdc, scy: scy, scx: scx, ly: ly, wy: wy, wx: wx, bgp: bgp, obp0: obp0, obp1: obp1) = _p) do
     scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
   end
-
-  # defp scanline_with_args(oam_data, row, vram, ref) do
-  #   [{_, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
-  #   scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
-  # end
-  # defp scanline_with_args(row, vram, ref) do
-  #   [{_, oam_data, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1}] = :ets.lookup(ref, row)
-  #   scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1)
-  # end
 
   defp scanline(oam_data, vram, lcdc, scy, scx, ly, wy, wx, bgp, obp0, obp1) do
     objs = if elem(@obj_enable, lcdc) do
