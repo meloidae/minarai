@@ -37,6 +37,12 @@ defmodule Minarai do
       _ ->
         nil
     end
+    case opts[:count_fn_calls] do
+      true ->
+        :persistent_term.put({Minarai, :count_fn_calls}, true)
+      _ ->
+        nil
+    end
     scale = case opts[:scale] do
       scale when is_integer(scale) ->
         scale
