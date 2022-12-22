@@ -2,9 +2,10 @@ defmodule Gameboy do
   alias Gameboy.Hardware
   # alias Gameboy.Cpu
   alias Gameboy.RecordCpu, as: Cpu
+  alias Gameboy.Hardware, as: Hardware
   # import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   # import Gameboy.Cpu.Decode, only: [decode_exec: 2]
-  import Gameboy.Cpu.Decode, only: [cpu_step: 2]
+  import Gameboy.Cpu.Decode, only: [cpu_step: 2, instruction: 3]
   import Gameboy.Cpu.Disassemble, only: [disassemble: 3]
   alias Gameboy.Joypad
   alias Gameboy.Interrupts
@@ -19,67 +20,80 @@ defmodule Gameboy do
       Utils.init_stats_table()
       Utils.init_counter_table()
     end
-    # Store read-only terms
-    # cartrom = Hardware.get_cart(hw).rom
-    # {bootrom, _} = Hardware.get_bootrom(hw)
-    # :persistent_term.put({Minarai, :cartrom}, cartrom)
-    # :persistent_term.put({Minarai, :bootrom}, bootrom)
     {cpu, hw}
   end
 
-  def step({cpu, hw} = gb) do
-    hw = receive do
+  @counter_limit 17556 * 200
+  def run(@counter_limit, cpu, hw) do
+    Process.spawn(fn -> start_next({cpu, hw}) end, [:link])
+  end
+  def run(counter, cpu, hw) do
+    receive do
       {:save, path} ->
-        save_state(gb, path)
-        hw
+        save_state({cpu, hw}, path)
+        cpu_run(counter, cpu, hw)
       {:load, path} ->
-        load_state(path)
+        {cpu, hw} = load_state(path)
+        cpu_run(counter, cpu, hw)
       {:save_latency, path} ->
         if :persistent_term.get({Minarai, :record_stats}, false) do
           Utils.save_frame_stats(path)
         else
           IO.puts("--record_stats option is not enabled")
         end
-        hw
+        cpu_run(counter, cpu, hw)
       {:key_down, key_name} ->
-        Hardware.keydown(hw, key_name)
+        cpu_run(counter, cpu, Hardware.keydown(hw, key_name))
       {:key_up, key_name} ->
-        Hardware.keyup(hw, key_name)
+        cpu_run(counter, cpu, Hardware.keyup(hw, key_name))
       _ ->
-        hw
+        cpu_run(counter, cpu, hw)
     after
       0 ->
-        hw
+        cpu_run(counter, cpu, hw)
     end
-    cpu_step(cpu, hw)
   end
 
-  # def start(opts \\ []) do
-  #   gb = Gameboy.init(opts)
-  #   loop(gb)
-  # end
+  def cpu_run(counter, cpu, hw) do
+    {cpu, hw} = Cpu.handle_interrupt(cpu, hw)
+    state = Cpu.state(cpu)
+    case state do
+      :running ->
+        {cpu, hw} = Cpu.fetch_next(cpu, hw, Cpu.read_register(cpu, :pc))
+        cpu_decode_exec(counter, cpu, hw)
+      :haltbug ->
+        # Halt bug. Fetch but don't increment pc
+        pc = Cpu.read_register(cpu, :pc)
+        {cpu, hw} = Cpu.fetch_next(cpu, hw, pc)
+        cpu = Cpu.write_register(cpu, :pc, pc)
+              |> Cpu.set_state(:running)
+        cpu_decode_exec(counter, cpu, hw)
+      :halt ->
+        # IO.puts("Halt")
+        run(counter + 1, cpu, Hardware.sync_cycle(hw))
+      _ -> # stop?
+        # IO.puts("stop")
+        run(counter + 1, cpu, hw)
+    end
+  end
 
-  # def run({cpu, hw}) do
-  #   loop({cpu, hw})
-  # end
-  # defp loop(gb), do: loop(Gameboy.step(gb))
+  def cpu_decode_exec(counter, cpu, hw) do
+    opcode = Cpu.opcode(cpu)
+    delayed_ime = Cpu.delayed_ime(cpu)
+    if delayed_ime == nil do
+      {cpu, hw} = instruction(opcode, cpu, hw)
+      run(counter + 1, cpu, hw)
+    else
+      {cpu, hw} = instruction(opcode, cpu, hw)
+      run(counter + 1, Cpu.apply_delayed_ime(cpu, delayed_ime), hw)
+    end
+  end
 
-  @counter_limit 17556 * 200
-  def start_chain(gb) do
+  def start_next({cpu, hw}) do
     ui_pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     :erlang.trace(self(), true, [:garbage_collection, tracer: ui_pid])
     :ets.update_element(:gb_process, :logic_pid, {2, self()})
-    loop_and_chain(0, gb)
-  end
-  defp loop_and_chain(@counter_limit, gb) do
-    Process.spawn(fn -> start_chain(gb) end, [:link])
-  end
-  defp loop_and_chain(counter, {_cpu, _hw} = gb), do: loop_and_chain(counter + 1, Gameboy.step(gb))
-
-  def resume(pid, gb) do
-    send(pid, {:resume, gb})
-    # gb_bin = :erlang.term_to_binary(gb)
-    # send(pid, {:resume_bin, gb_bin})
+    run(0, cpu, hw)
   end
 
   def save_state(gb, path \\ "state.save") do

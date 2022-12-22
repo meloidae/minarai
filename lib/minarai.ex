@@ -85,7 +85,8 @@ defmodule Minarai do
     Utils.compile_template("templates/cartridge_template.ex", {"path", opts[:cart]})
     gb = Gameboy.init(opts)
     spawn_opt = [:link, min_heap_size: 2000]
-    pid = Process.spawn(fn -> Gameboy.start_chain(gb) end, spawn_opt)
+    # pid = Process.spawn(fn -> Gameboy.start_chain(gb) end, spawn_opt)
+    pid = Process.spawn(fn -> Gameboy.start_next(gb) end, spawn_opt)
     :ets.insert(:gb_process, {:logic_pid, pid})
     :ets.insert(:gb_process, {:ui_pid, self()})
 
