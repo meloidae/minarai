@@ -17,19 +17,6 @@ defmodule Gameboy.Hardware do
 
   require Record
 
-  # defstruct bootrom: nil,
-  #           cart: nil,
-  #           ppu: nil,
-  #           wram: nil,
-  #           hram: nil,
-  #           apu: nil,
-  #           timer: nil, 
-  #           intr: nil,
-  #           dma: nil,
-  #           serial: nil,
-  #           joypad: nil,
-  #           counter: 0
-
   Record.defrecordp(:hardware, 
                     bootrom: nil,
                     cart: nil,
@@ -75,19 +62,7 @@ defmodule Gameboy.Hardware do
     intr = Interrupts.init()
     dma = Dma.init()
     joypad = Joypad.init()
-    # %Hardware{
-    #   bootrom: bootrom,
-    #   cart: cart,
-    #   ppu: ppu,
-    #   wram: wram,
-    #   hram: hram,
-    #   apu: apu,
-    #   timer: timer,
-    #   intr: intr,
-    #   dma: dma,
-    #   serial: %Serial{},
-    #   joypad: joypad,
-    # }
+
     hardware(
       bootrom: bootrom,
       cart: cart,
@@ -103,17 +78,13 @@ defmodule Gameboy.Hardware do
     )
   end
 
-  # def keydown(%Hardware{joypad: joypad, intr: intr} = hw, key_name) do
   def keydown(hardware(joypad: joypad, intr: intr) = hw, key_name) do
     {joypad, req} = Joypad.keydown(joypad, key_name)
     intr = Interrupts.request(intr, req)
-    # %{hw | joypad: joypad, intr: intr}
     hardware(hw, joypad: joypad, intr: intr)
   end
 
-  # def keyup(%Hardware{joypad: joypad} = hw, key_name) do
   def keyup(hardware(joypad: joypad) = hw, key_name) do
-    # Map.put(hw, :joypad, Joypad.keyup(joypad, key_name))
     hardware(hw, joypad: Joypad.keyup(joypad, key_name))
   end
 
@@ -134,21 +105,6 @@ defmodule Gameboy.Hardware do
   def get_cart(hardware(cart: cart) = _hw), do: cart
   def get_bootrom(hardware(bootrom: bootrom) = _hw), do: bootrom
 
-  # def prepare_for_copy(hardware(bootrom: {_memory, enable}, cart: cart) = hw) do
-  #   # Remove references to large tuples
-  #   bootrom = {nil, enable}
-  #   cart = %{cart | rom: nil}
-  #   hardware(hw, bootrom: bootrom, cart: cart)
-  # end
-
-  # def recover_rom(hardware(bootrom: {_memory, enable}, cart: cart) = hw) do
-  #   cartrom = :persistent_term.get({Minarai, :cartrom})
-  #   bootrom_data = :persistent_term.get({Minarai, :bootrom})
-  #   hardware(hw, cart: %{cart | rom: cartrom}, bootrom: {bootrom_data, enable})
-  # end
-
-  # defp _read(%Hardware{bootrom: {_, true} = bootrom} = hw, addr, 0x00) do
-  # defp _read(hardware(bootrom: {_, true} = bootrom) = hw, addr, 0x00) do
   defp _read(hardware(bootrom: true = bootrom) = hw, addr, 0x00) do
     hw = cycle(hw)
     {Bootrom.read(bootrom, addr), hw}
@@ -156,55 +112,46 @@ defmodule Gameboy.Hardware do
   for high <- 0..0xff do
     cond do
       high <= 0x3f ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Cartridge.read_rom_low(hardware(hw, :cart), addr), hw}
         end
       high <= 0x7f ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Cartridge.read_rom_high(hardware(hw, :cart), addr), hw}
         end
       high <= 0x9f ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Ppu.read_vram(hardware(hw, :ppu), addr), hw}
         end
       high <= 0xbf ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Cartridge.read_ram(hardware(hw, :cart), addr), hw}
         end
       high <= 0xcf ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Wram.read_low(hardware(hw, :wram), addr), hw}
         end
       high <= 0xdf ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Wram.read_high(hardware(hw, :wram), addr), hw}
         end
       high <= 0xef ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Wram.read_low(hardware(hw, :wram), addr), hw}
         end
       high <= 0xfd ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           hw = cycle(hw)
           {Wram.read_high(hardware(hw, :wram), addr), hw}
         end
       high == 0xfe ->
-        # defp _read(%Hardware{} = hw, addr, unquote(high)) do
         defp _read(hw, addr, unquote(high)) do
           low = addr &&& 0xff
           if low <= 0x9f do
@@ -357,11 +304,6 @@ defmodule Gameboy.Hardware do
     _read_ff(hw, addr, low)
   end
 
-
-  # defp _write(hw, addr, value, 0x00) when hw.bootrom.active do
-  #   memory_cycle(hw, fn hw -> Map.put(hw, :bootrom, Bootrom.write(hw.bootrom, addr, value)) end)
-  # end
-
   for high <- 0..0xff do
     cond do
       high <= 0x7f ->
@@ -372,7 +314,6 @@ defmodule Gameboy.Hardware do
       high <= 0x9f ->
         defp _write(hw, addr, value, unquote(high)) do
           hw = cycle(hw)
-          # Map.put(hw, :ppu, Ppu.write_vram(hw.ppu, addr, value))
           Ppu.write_vram(hardware(hw, :ppu), addr, value)
           hw
         end
@@ -384,28 +325,24 @@ defmodule Gameboy.Hardware do
       high <= 0xcf ->
         defp _write(hw, addr, value, unquote(high)) do
           hw = cycle(hw)
-          # Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value))
           Wram.write_low(hardware(hw, :wram), addr, value)
           hw
         end
       high <= 0xdf ->
         defp _write(hw, addr, value, unquote(high)) do
           hw = cycle(hw)
-          # Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value))
           Wram.write_high(hardware(hw, :wram), addr, value)
           hw
         end
       high <= 0xef ->
         defp _write(hw, addr, value, unquote(high)) do
           hw = cycle(hw)
-          # Map.put(hw, :wram, Wram.write_low(hw.wram, addr, value))
           Wram.write_low(hardware(hw, :wram), addr, value)
           hw
         end
       high <= 0xfd ->
         defp _write(hw, addr, value, unquote(high)) do
           hw = cycle(hw)
-          # Map.put(hw, :wram, Wram.write_high(hw.wram, addr, value))
           Wram.write_high(hardware(hw, :wram), addr, value)
           hw
         end
@@ -555,7 +492,6 @@ defmodule Gameboy.Hardware do
   end
 
   # DMA is requested
-  # defp timer_read_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_read_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
     timestamp(counter)
     # oam
@@ -570,15 +506,12 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req != 0 do
       intr = Interrupts.request(intr, req)
-      # {value, %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}}
       {value, hardware(hw, ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1)}
     else
-      # {value, %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}}
       {value, hardware(hw, ppu: ppu, timer: timer, dma: dma, counter: counter + 1)}
     end
   end
   # No DMA
-  # defp timer_read_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_read_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
     timestamp(counter)
     # ppu
@@ -588,16 +521,13 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req != 0 do
       intr = Interrupts.request(intr, req)
-      # {value, %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}}
       {value, hardware(hw, ppu: ppu, timer: timer, intr: intr, counter: counter + 1)}
     else
-      # {value, %{hw | ppu: ppu, timer: timer, counter: counter + 1}}
       {value, hardware(hw, ppu: ppu, timer: timer, counter: counter + 1)}
     end
   end
 
   # DMA is requested
-  # defp timer_write_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_write_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
     timestamp(counter)
     # oam
@@ -612,15 +542,12 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req !== 0 do
       intr = Interrupts.request(intr, req)
-      # %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1)
     else
-      # %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, dma: dma, counter: counter + 1)
     end
   end
   # No DMA
-  # defp timer_write_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_write_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
     timestamp(counter)
     # ppu
@@ -630,16 +557,13 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req !== 0 do
       intr = Interrupts.request(intr, req)
-      # %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, intr: intr, counter: counter + 1)
     else
-      # %{hw | ppu: ppu, timer: timer, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, counter: counter + 1)
     end
   end
 
   # DMA is requested
-  # defp cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
   defp cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
     timestamp(counter)
     # oam
@@ -654,15 +578,12 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req !== 0 do
       intr = Interrupts.request(intr, req)
-      # %{hw | ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, dma: dma, intr: intr, counter: counter + 1)
     else
-      # %{hw | ppu: ppu, timer: timer, dma: dma, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, dma: dma, counter: counter + 1)
     end
   end
   # No DMA
-  # defp cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
   defp cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
     timestamp(counter)
     # ppu
@@ -672,10 +593,8 @@ defmodule Gameboy.Hardware do
     req = ppu_req ||| timer_req
     if req !== 0 do
       intr = Interrupts.request(intr, req)
-      # %{hw | ppu: ppu, timer: timer, intr: intr, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, intr: intr, counter: counter + 1)
     else
-      # %{hw | ppu: ppu, timer: timer, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, counter: counter + 1)
     end
   end
