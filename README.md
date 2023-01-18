@@ -22,8 +22,7 @@ Controls are:
 - No frame throttling (runs much faster than 59.7fps on my laptop)
 - No sound
 - (Pokemon Yellow is playable)
-- FPS is well above 60 on average, but drops below 60 once in every 15 frames or so
-  - Something to do with GC?
+- FPS is well above 60 on average, but occasionally dips below 60 in some frames
 
 ## GIFs
 ![intro](README/intro.gif)
