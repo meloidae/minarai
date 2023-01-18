@@ -543,6 +543,12 @@ defmodule Gameboy.Hardware do
     raise "dma read from #{Utils.to_hex(addr)} is not supported"
   end
 
+  defp timestamp(counter) do
+    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false) do
+      Utils.store_timestamp()
+    end
+  end
+
   defp memory_cycle(hw, memory_fn) do
     hw = cycle(hw)
     memory_fn.(hw)
@@ -551,7 +557,7 @@ defmodule Gameboy.Hardware do
   # DMA is requested
   # defp timer_read_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_read_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -574,7 +580,7 @@ defmodule Gameboy.Hardware do
   # No DMA
   # defp timer_read_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_read_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
@@ -593,7 +599,7 @@ defmodule Gameboy.Hardware do
   # DMA is requested
   # defp timer_write_cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_write_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -616,7 +622,7 @@ defmodule Gameboy.Hardware do
   # No DMA
   # defp timer_write_cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw, timer_fn) do
   defp timer_write_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
@@ -635,7 +641,7 @@ defmodule Gameboy.Hardware do
   # DMA is requested
   # defp cycle(%{dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
   defp cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -658,7 +664,7 @@ defmodule Gameboy.Hardware do
   # No DMA
   # defp cycle(%{dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter} = hw) do
   defp cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false), do: Utils.store_timestamp()
+    timestamp(counter)
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
@@ -672,5 +678,8 @@ defmodule Gameboy.Hardware do
       # %{hw | ppu: ppu, timer: timer, counter: counter + 1}
       hardware(hw, ppu: ppu, timer: timer, counter: counter + 1)
     end
+  end
+
+  def memory_write_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, addr, value, key) do
   end
 end
