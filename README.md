@@ -41,9 +41,9 @@ Controls are:
 
 ## Notes
 ### On elixir's performance
-Single-thread performance of Elixir is good enough to achieve 60+FPS in GB emulation.  
+Single-thread performance of Elixir should be good enough to achieve 60+FPS GB emulation.  
 However, I've also encountered occasional but significant drop offs in frame rates.
-These drop offs coincide with full-sweep GC.
+These drop offs coincide with full-sweep GC of the emulation process.
 
 In order to eliminate full-sweep GC, one must avoid using a single persistent process for emulation.
 I originally tried using two processes where they take turns emulating the gameboy state transitions.
@@ -66,8 +66,9 @@ Tuples have great read performance, but are expensive to copy, especially when t
 Elixir provides off-process storage options like ETS that do not necessitate copying of stored data when switching processes, but their read performance is not ideal for frequently read data like ROM
 (I do use ETS to implement mutable memory like RAM).
 
-I decided to use module attributes.
-Module attributes are only mutable during compilation and their values are stored in the module's literal pool.
+I decided to use module attributes (for now).
+Module attributes are only mutable during compilation and their values are stored in a module's literal pool.
+Values stored as module attributes are accessible from all processes without copying.
 
 ### Some implementation details
 Only hram is accessible by cpu during oam dma transfer & hram can't be the source of dma transfer  
