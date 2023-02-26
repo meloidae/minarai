@@ -1,7 +1,8 @@
 defmodule Gameboy.RecordPpu do
   import Bitwise
   alias Gameboy.Memory
-  alias Gameboy.EtsMemory, as: RWMemory
+  # alias Gameboy.EtsMemory, as: RWMemory
+  alias Gameboy.PtAtomicsMemory, as: RWMemory
   alias Gameboy.Interrupts
 
   # alias Gameboy.RecordPpu, as: Ppu
