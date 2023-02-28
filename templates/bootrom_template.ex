@@ -9,6 +9,7 @@ defmodule Gameboy.Bootrom do
 
   defp memory, do: @memory
 
+  def init(), do: init(nil)
   def init(_path) do
     true
   end
