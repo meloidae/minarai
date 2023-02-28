@@ -28,6 +28,11 @@ defmodule Gameboy.PtAtomicsMemory do
 
   def read_range(name, addr, len), do: tolist(name, addr + 1, len)
 
+  def read_binary(name, addr, len) do
+    tolist(name, addr + 1, len)
+    |> IO.iodata_to_binary()
+  end
+
   def read_array({name, block_size}, bank, addr) do
     :persistent_term.get(name)
     |> :atomics.get(block_size * bank + addr + 1)
