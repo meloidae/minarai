@@ -46,6 +46,7 @@ defmodule Gameboy.Utils do
       [] ->
         0
       [{:total_cycle, cycle}] ->
+        cycle
     end
   end
 
