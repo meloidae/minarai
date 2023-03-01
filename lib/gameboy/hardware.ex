@@ -480,9 +480,13 @@ defmodule Gameboy.Hardware do
     raise "dma read from #{Utils.to_hex(addr)} is not supported"
   end
 
-  defp timestamp(counter) do
-    if rem(counter, @cycles_per_frame) == 0 and :persistent_term.get({Minarai, :record_stats}, false) do
-      Utils.store_timestamp()
+  defp timestamp() do
+    counter = Process.get(:stats_counter)
+    if counter != nil do
+      if rem(counter, @cycles_per_frame) == 0 do
+        Utils.store_timestamp()
+      end
+      Process.put(:stats_counter, counter + 1)
     end
   end
 
@@ -493,7 +497,7 @@ defmodule Gameboy.Hardware do
 
   # DMA is requested
   defp timer_read_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    timestamp(counter)
+    timestamp()
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -513,7 +517,7 @@ defmodule Gameboy.Hardware do
   end
   # No DMA
   defp timer_read_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    timestamp(counter)
+    timestamp()
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
@@ -529,7 +533,7 @@ defmodule Gameboy.Hardware do
 
   # DMA is requested
   defp timer_write_cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    timestamp(counter)
+    timestamp()
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -549,7 +553,7 @@ defmodule Gameboy.Hardware do
   end
   # No DMA
   defp timer_write_cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw, timer_fn) do
-    timestamp(counter)
+    timestamp()
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
@@ -565,7 +569,7 @@ defmodule Gameboy.Hardware do
 
   # DMA is requested
   defp cycle(hardware(dma: %{requested: true} = dma, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
-    timestamp(counter)
+    timestamp()
     # oam
     dma = Dma.acknowledge_request(dma)
     addr = Dma.address(dma)
@@ -585,7 +589,7 @@ defmodule Gameboy.Hardware do
   end
   # No DMA
   defp cycle(hardware(dma: _, ppu: ppu, timer: timer, intr: intr, counter: counter) = hw) do
-    timestamp(counter)
+    timestamp()
     # ppu
     {ppu, ppu_req} = Ppu.cycle(ppu)
     # timer
