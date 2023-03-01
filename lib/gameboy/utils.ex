@@ -16,7 +16,8 @@ defmodule Gameboy.Utils do
   end
 
   @stats_table :stats_table
-  @counter_table :counter_table
+  @fn_counter_table :fn_counter_table
+  @mem_counter_table :mem_counter_table
   def stats_table, do: @stats_table
 
   def init_stats_table do
@@ -34,6 +35,18 @@ defmodule Gameboy.Utils do
     :ets.insert(@stats_table, {index, curr_time, mem, info})
     :ets.insert(@stats_table, {:counter, index + 1})
     index + 1
+  end
+
+  def store_cycle(cycle) do
+    :ets.insert(@stats_table, {:total_cycle, cycle})
+  end
+
+  def get_cycle() do
+    case :ets.lookup(@stats_table, :total_cycle) do
+      [] ->
+        0
+      [{:total_cycle, cycle}] ->
+    end
   end
 
   def save_frame_stats(path) do
@@ -55,7 +68,7 @@ defmodule Gameboy.Utils do
     IO.puts("Stats saved to: #{path}")
     # Reset index value
     :ets.insert(@stats_table, {:counter, 0})
-    fn_counts = :ets.tab2list(@counter_table)
+    fn_counts = :ets.tab2list(@fn_counter_table)
     if fn_counts != [] do
       fn_counts = Enum.sort(fn_counts, fn {_, i}, {_, j} -> i >= j end)
       File.open("log/fn_counts.txt", [:write], fn file ->
@@ -71,18 +84,23 @@ defmodule Gameboy.Utils do
       [{_, index} | _] ->
         index
       _ ->
-      -1
+        -1
     end
   end
 
-  def counter_table, do: @counter_table
+  def fn_counter_table, do: @fn_counter_table
 
   def init_counter_table do
-    :ets.new(@counter_table, [:named_table, :public])
+    :ets.new(@fn_counter_table, [:named_table, :public])
+    :ets.new(@mem_counter_table, [:named_table, :public])
   end
 
-  def update_counter(name) do
-    :ets.update_counter(@counter_table, name, 1, {name, 0})
+  def update_fn_counter(name) do
+    :ets.update_counter(@fn_counter_table, name, 1, {name, 0})
+  end
+
+  def update_mem_counter(name) do
+    :ets.update_counter(@mem_counter_table, name, 1, {name, 0})
   end
 
   def is_plain_string(code) do

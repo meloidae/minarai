@@ -29,6 +29,9 @@ defmodule Gameboy do
 
   @counter_limit 17556 * 200
   def run(@counter_limit, cpu, hw) do
+    if :persistent_term.get({Minarai, :record_stats}, false) do
+      Utils.store_cycle(Process.get(:stats_counter, 0))
+    end
     Process.spawn(fn -> start_next({cpu, hw}) end, [:link])
   end
   def run(counter, cpu, hw) do
@@ -166,6 +169,9 @@ defmodule Gameboy do
   def start_next({cpu, hw}) do
     ui_pid = :ets.lookup_element(:gb_process, :logic_pid, 2)
     :erlang.trace(self(), true, [:garbage_collection, tracer: ui_pid])
+    if :persistent_term.get({Minarai, :record_stats}, false) do
+      Process.put(:stats_counter, Utils.get_cycle())
+    end
     :ets.update_element(:gb_process, :logic_pid, {2, self()})
     run(0, cpu, hw)
   end
