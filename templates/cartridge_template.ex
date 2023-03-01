@@ -3,7 +3,8 @@ defmodule Gameboy.Cartridge do
   alias Gameboy.Memory
   alias Gameboy.Utils
   alias Gameboy.TupleMemory
-  alias Gameboy.EtsMemory, as: RWMemory
+  # alias Gameboy.EtsMemory, as: RWMemory
+  alias Gameboy.PtAtomicsMemory, as: RWMemory
 
   defstruct mbc: :nombc,
             ram: nil
