@@ -1,6 +1,6 @@
 defmodule Gameboy.Ppu do
   use Bitwise
-  alias Gameboy.Memory
+  alias Gameboy.BinaryMemory, as: Memory
   alias Gameboy.EtsMemory, as: RWMemory
   alias Gameboy.Interrupts
 

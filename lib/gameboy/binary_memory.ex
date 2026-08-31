@@ -1,5 +1,5 @@
-defmodule Gameboy.Memory do
-  alias Gameboy.Memory
+defmodule Gameboy.BinaryMemory do
+  alias Gameboy.BinaryMemory, as: Memory
 
   defstruct data: <<0x00::size(0x1)-unit(8)>>, size: 0x01
 

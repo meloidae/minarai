@@ -1,7 +1,7 @@
 defmodule Gameboy.Cartridge do
   use Bitwise
   alias Gameboy.Cartridge
-  alias Gameboy.Memory
+  alias Gameboy.BinaryMemory, as: Memory
   alias Gameboy.Utils
   alias Gameboy.TupleMemory
   alias Gameboy.EtsMemory, as: RWMemory
