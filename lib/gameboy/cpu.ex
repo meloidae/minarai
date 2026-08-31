@@ -1,4 +1,4 @@
-defmodule Gameboy.RecordCpu do
+defmodule Gameboy.Cpu do
   use Bitwise
   require Record
 

@@ -3,8 +3,7 @@ defmodule Gameboy.Hardware do
   alias Gameboy.Hardware
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
-  # alias Gameboy.SimplePpu, as: Ppu
-  alias Gameboy.RecordPpu, as: Ppu
+  alias Gameboy.Ppu
   alias Gameboy.Wram
   alias Gameboy.Hram
   alias Gameboy.Apu

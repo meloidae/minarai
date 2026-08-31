@@ -1,6 +1,5 @@
 defmodule Gameboy.Cpu.Decode do
-  # alias Gameboy.Cpu
-  alias Gameboy.RecordCpu, as: Cpu
+  alias Gameboy.Cpu
   alias Gameboy.Cpu.Execute, as: Exec
   alias Gameboy.Utils
   alias Gameboy.Hardware

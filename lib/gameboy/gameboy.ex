@@ -1,7 +1,6 @@
 defmodule Gameboy do
   alias Gameboy.Hardware
-  # alias Gameboy.Cpu
-  alias Gameboy.RecordCpu, as: Cpu
+  alias Gameboy.Cpu
   # import Gameboy.Cpu, only: [fetch_next: 3, handle_interrupt: 2]
   # import Gameboy.Cpu.Decode, only: [decode_exec: 2]
   import Gameboy.Cpu.Decode, only: [cpu_step: 2]
