@@ -1,63 +1,50 @@
-defmodule Gameboy.Cpu do
+defmodule Gameboy.RecordCpu do
   use Bitwise
-  alias Gameboy.Cpu
+  require Record
+
   alias Gameboy.Hardware
   alias Gameboy.Utils
   alias Gameboy.Cpu.Disassemble
 
-  defstruct a: 0x00,
-            f: 0x00,
-            b: 0x00,
-            c: 0x00,
-            d: 0x00,
-            e: 0x00,
-            h: 0x00,
-            l: 0x00,
-            pc: 0x0000,
-            sp: 0x0000,
-            opcode: 0x0,
-            ime: false,
-            delayed_ime: nil, 
-            state: :running
-
-  defimpl Inspect, for: Cpu do
-    def inspect(cpu, _) do
-      [
-        "pc: #{Utils.to_hex(cpu.pc)} ",
-        "op: #{Utils.to_hex(cpu.opcode)} ",
-        "sp: #{Utils.to_hex(cpu.sp)} ",
-        "af: #{Utils.to_hex(Cpu.read_register(cpu, :af))} ",
-        "bc: #{Utils.to_hex(Cpu.read_register(cpu, :bc))} ",
-        "de: #{Utils.to_hex(Cpu.read_register(cpu, :de))} ",
-        "hl: #{Utils.to_hex(Cpu.read_register(cpu, :hl))}"
-      ] |> IO.iodata_to_binary()
-    end
-  end
-
+  Record.defrecordp(:cpu,
+                    a: 0x00,
+                    f: 0x00,
+                    b: 0x00,
+                    c: 0x00,
+                    d: 0x00,
+                    e: 0x00,
+                    h: 0x00,
+                    l: 0x00,
+                    pc: 0x0000,
+                    sp: 0x0000,
+                    opcode: 0x0,
+                    ime: false,
+                    delayed_ime: nil, 
+                    state: :running)
 
   def init do
-    %Cpu{}
+    cpu()
   end
 
   # Fetch opcode for instruction and increment pc
-  def fetch_next(cpu, hw, addr) do
+  def fetch_next(cp, hw, addr) do
     {opcode, hw} = Hardware.synced_read(hw, addr)
     if :persistent_term.get({Minarai, :count_fn_calls}, false) do
-      Utils.update_counter(Disassemble.disassemble(opcode, cpu, hw))
+      Utils.update_counter(Disassemble.disassemble(opcode, cp, hw))
     end
-    {%{cpu | opcode: opcode, pc: (addr + 1) &&& 0xffff}, hw}
+    {cpu(cp, opcode: opcode, pc: (addr + 1) &&& 0xffff), hw}
   end
 
-  # handle interrupt TODO
-  def handle_interrupt(%Cpu{} = cpu, hw) do
+  # Handle interrupt
+  def handle_interrupt(cp, hw) do
     case Hardware.check_interrupt(hw) do
       nil ->
         # No interrupt is requested
-        {cpu, hw}
+        {cp, hw}
       {addr, mask} ->
-        %{ime: ime, pc: pc, sp: sp, state: state} = cpu
+        cpu(ime: ime, pc: pc, sp: sp, state: state) = cp
         cond do
-          ime ->
+          ime -> # ime is enabled
             # Add 8 cycles
             hw = Hardware.sync_cycle(hw) |> Hardware.sync_cycle()
             # Push value of pc on to stack
@@ -70,79 +57,56 @@ defmodule Gameboy.Cpu do
             # Acknowledge interrupt
             hw = Hardware.acknowledge_interrupt(hw, mask)
             # Change pc to address specified by interrupt and switch to running state
-            # if cpu.state != :running do
-              # IO.puts("Resume with jump")
-            # end
-            {%{cpu | pc: addr, sp: sp, state: :running, ime: false}, hw}
+            {cpu(cp, pc: addr, sp: sp, state: :running, ime: false), hw}
           state != :haltbug ->
             # When ime is disabled, resume from halt without acknowledging interrupts
-            # IO.puts("Resume no jump")
-            {Map.put(cpu, :state, :running), hw}
+            {cpu(cp, state: :running), hw}
           true ->
             # halt bug
-            {cpu, hw}
+            {cp, hw}
         end
     end
   end
 
   # 16-bit reads from a register
   @compile {:inline, read_register: 2}
-  def read_register(%Cpu{a: a, f: f}, :af), do: (a <<< 8) ||| f
-  def read_register(%Cpu{b: b, c: c}, :bc), do: (b <<< 8) ||| c
-  def read_register(%Cpu{d: d, e: e}, :de), do: (d <<< 8) ||| e
-  def read_register(%Cpu{h: h, l: l}, :hl), do: (h <<< 8) ||| l
-  def read_register(%Cpu{pc: pc}, :pc), do: pc
-  def read_register(%Cpu{sp: sp}, :sp), do: sp
+  def read_register(cpu(a: a, f: f), :af), do: (a <<< 8) ||| f
+  def read_register(cpu(b: b, c: c), :bc), do: (b <<< 8) ||| c
+  def read_register(cpu(d: d, e: e), :de), do: (d <<< 8) ||| e
+  def read_register(cpu(h: h, l: l), :hl), do: (h <<< 8) ||| l
+  def read_register(cpu(pc: pc), :pc), do: pc
+  def read_register(cpu(sp: sp), :sp), do: sp
 
   # 8 bit reads from a register
-  def read_register(%Cpu{a: a}, :a), do: a
-  def read_register(%Cpu{f: f}, :f), do: f
-  def read_register(%Cpu{b: b}, :b), do: b
-  def read_register(%Cpu{c: c}, :c), do: c
-  def read_register(%Cpu{d: d}, :d), do: d
-  def read_register(%Cpu{e: e}, :e), do: e
-  def read_register(%Cpu{h: h}, :h), do: h
-  def read_register(%Cpu{l: l}, :l), do: l
-
+  def read_register(cpu(a: a), :a), do: a
+  def read_register(cpu(f: f), :f), do: f
+  def read_register(cpu(b: b), :b), do: b
+  def read_register(cpu(c: c), :c), do: c
+  def read_register(cpu(d: d), :d), do: d
+  def read_register(cpu(e: e), :e), do: e
+  def read_register(cpu(h: h), :h), do: h
+  def read_register(cpu(l: l), :l), do: l
 
   # 16-bit writes to a register
   @compile {:inline, write_register: 3}
-  def write_register(%Cpu{} = cpu, :af, data), do: %{cpu | a: (data >>> 8) &&& 0xff, f: data &&& 0xf0}  # lower nibble of f is always zero
-  def write_register(%Cpu{} = cpu, :bc, data), do: %{cpu | b: (data >>> 8) &&& 0xff, c: data &&& 0xff}
-  def write_register(%Cpu{} = cpu, :de, data), do: %{cpu | d: (data >>> 8) &&& 0xff, e: data &&& 0xff}
-  def write_register(%Cpu{} = cpu, :hl, data), do: %{cpu | h: (data >>> 8) &&& 0xff, l: data &&& 0xff}
-  def write_register(%Cpu{} = cpu, :pc, data), do: Map.put(cpu, :pc, data)
-  def write_register(%Cpu{} = cpu, :sp, data), do: Map.put(cpu, :sp, data)
+  def write_register(cp, :af, data), do: cpu(cp, a: (data >>> 8) &&& 0xff, f: data &&& 0xf0)  # lower nibble of f is always zero
+  def write_register(cp, :bc, data), do: cpu(cp, b: (data >>> 8) &&& 0xff, c: data &&& 0xff)
+  def write_register(cp, :de, data), do: cpu(cp, d: (data >>> 8) &&& 0xff, e: data &&& 0xff)
+  def write_register(cp, :hl, data), do: cpu(cp, h: (data >>> 8) &&& 0xff, l: data &&& 0xff)
+  def write_register(cp, :pc, data), do: cpu(cp, pc: data)
+  def write_register(cp, :sp, data), do: cpu(cp, sp: data)
 
   # 8-bit writes to a register
-  def write_register(%Cpu{} = cpu, :a, data), do: Map.put(cpu, :a, data)
-  def write_register(%Cpu{} = cpu, :f, data), do: Map.put(cpu, :f, data &&& 0xf0)  # Lower nibble is always zero
-  def write_register(%Cpu{} = cpu, :b, data), do: Map.put(cpu, :b, data)
-  def write_register(%Cpu{} = cpu, :c, data), do: Map.put(cpu, :c, data)
-  def write_register(%Cpu{} = cpu, :d, data), do: Map.put(cpu, :d, data)
-  def write_register(%Cpu{} = cpu, :e, data), do: Map.put(cpu, :e, data)
-  def write_register(%Cpu{} = cpu, :h, data), do: Map.put(cpu, :h, data)
-  def write_register(%Cpu{} = cpu, :l, data), do: Map.put(cpu, :l, data)
+  def write_register(cp, :a, data), do: cpu(cp, a: data)
+  def write_register(cp, :f, data), do: cpu(cp, f: data &&& 0xf0)  # Lower nibble is always zero
+  def write_register(cp, :b, data), do: cpu(cp, b: data)
+  def write_register(cp, :c, data), do: cpu(cp, c: data)
+  def write_register(cp, :d, data), do: cpu(cp, d: data)
+  def write_register(cp, :e, data), do: cpu(cp, e: data)
+  def write_register(cp, :h, data), do: cpu(cp, h: data)
+  def write_register(cp, :l, data), do: cpu(cp, l: data)
 
-  # Set/Get flags
-  for {which_flag, offset} <- Enum.zip([:z, :n, :h, :c], 7..4) do
-    true_val = 1 <<< offset
-    false_val = bxor(0xff, true_val)
-    def set_flag(cpu, unquote(which_flag), true) do
-      f = cpu.f ||| unquote(true_val)
-      Map.put(cpu, :f, f)
-    end
-
-    def set_flag(cpu, unquote(which_flag), false) do
-      f = cpu.f &&& unquote(false_val)
-      Map.put(cpu, :f, f)
-    end
-
-    # def flag(%Cpu{} = cpu, unquote(which_flag)) do
-    #   (cpu.f &&& unquote(true_val)) != 0
-    # end
-  end
-
+  # Set all flags at once
   for z <- [true, false] do
     for n <- [true, false] do
       for h <- [true, false] do
@@ -152,17 +116,17 @@ defmodule Gameboy.Cpu do
           h_val = if h, do: 1 <<< 5, else: 0
           c_val = if c, do: 1 <<< 4, else: 0
           f_val = bor(z_val, n_val) |> bor(h_val) |> bor(c_val)
-          def set_all_flags(%Cpu{} = cpu, unquote(z), unquote(n), unquote(h), unquote(c)) do
-            Map.put(cpu, :f, unquote(f_val))
+          def set_all_flags(cp, unquote(z), unquote(n), unquote(h), unquote(c)) do
+            cpu(cp, f: unquote(f_val))
           end
         end
       end
     end
   end
 
-  def set_flags(cpu, flags) do
-    f = compute_flags(flags, cpu.f)
-    Map.put(cpu, :f, f)
+  # Set one or more flags at once
+  def set_flags(cpu(f: f) = cp, flags) do
+    cpu(cp, f: compute_flags(flags, f))
   end
   defp compute_flags([], value), do: value
   defp compute_flags([{:z, true} | t], value), do: compute_flags(t, value ||| 0x80)
@@ -174,20 +138,21 @@ defmodule Gameboy.Cpu do
   defp compute_flags([{:c, true} | t], value), do: compute_flags(t, value ||| 0x10)
   defp compute_flags([{:c, false} | t], value), do: compute_flags(t, value &&& 0xef)
 
+  # Get flag
   @z_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 7)) != 0 end) |> List.to_tuple()
-  def flag(cpu, :z), do: elem(@z_table, cpu.f)
+  def flag(cpu(f: f), :z), do: elem(@z_table, f)
   @n_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 6)) != 0 end) |> List.to_tuple()
-  def flag(cpu, :n), do: elem(@n_table, cpu.f)
+  def flag(cpu(f: f), :n), do: elem(@n_table, f)
   @h_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 5)) != 0 end) |> List.to_tuple()
-  def flag(cpu, :h), do: elem(@h_table, cpu.f)
+  def flag(cpu(f: f), :h), do: elem(@h_table, f)
   @c_table 0..255 |> Enum.map(fn x -> (x &&& (1 <<< 4)) != 0 end) |> List.to_tuple()
-  def flag(cpu, :c), do: elem(@c_table, cpu.f)
+  def flag(cpu(f: f), :c), do: elem(@c_table, f)
 
   # Check flag based on condition code
-  def check_condition(cpu, :nz), do: !flag(cpu, :z)
-  def check_condition(cpu, :z), do: flag(cpu, :z)
-  def check_condition(cpu, :nc), do: !flag(cpu, :c)
-  def check_condition(cpu, :c), do: flag(cpu, :c)
+  def check_condition(cp, :nz), do: !flag(cp, :z)
+  def check_condition(cp, :z), do: flag(cp, :z)
+  def check_condition(cp, :nc), do: !flag(cp, :c)
+  def check_condition(cp, :c), do: flag(cp, :c)
 
 
   # Add two u16 values, then get carries from bit 7 (carry) and bit 3 (half carry)
@@ -236,8 +201,8 @@ defmodule Gameboy.Cpu do
   end
 
   # Add two u8 values and c flag, then get carries from bit 7 (carry) and bit 3 (half carry)
-  def adc_u8_byte_carry(a, b, cpu) do
-    c = if flag(cpu, :c), do: 1, else: 0
+  def adc_u8_byte_carry(a, b, cp) do
+    c = if flag(cp, :c), do: 1, else: 0
     sum = (a + b + c) &&& 0xff
     carry = ((a + b + c) &&& 0x100) != 0
     half_carry = (((a &&& 0xf) + (b &&& 0xf) + c) &&& 0x10) != 0
@@ -266,8 +231,8 @@ defmodule Gameboy.Cpu do
   end
 
   # Sub u8 and c flag from u8, then get carries from bit 7 (carry) and bit 3 (half carry)
-  def sbc_u8_byte_carry(a, b, cpu) do
-    c = if flag(cpu, :c), do: 1, else: 0
+  def sbc_u8_byte_carry(a, b, cp) do
+    c = if flag(cp, :c), do: 1, else: 0
     diff = (a - b - c) &&& 0xff
     carry = a < (b + c)
     half_carry = (a &&& 0xf) < ((b &&& 0xf) + c)
@@ -287,19 +252,12 @@ defmodule Gameboy.Cpu do
   def rlc_u8_byte_carry(value) do
     elem(@rlc, value)
   end
-
-  # def rlc_u8_byte_carry(value) do
-  #   carry = (value &&& 0x80) != 0
-  #   value = if carry, do: (value <<< 1) ||| 0x1, else: value <<< 1
-  #   value = value &&& 0xff
-  #   {value, carry}
-  # end
-  def rlc_u8_byte_carry(value, _cpu), do: rlc_u8_byte_carry(value)
+  def rlc_u8_byte_carry(value, _cp), do: rlc_u8_byte_carry(value)
 
   # Rotate u8 value to left through carry flag, old bit 7 to carry
-  def rl_u8_byte_carry(value, cpu) do
+  def rl_u8_byte_carry(value, cp) do
     carry = (value &&& 0x80) != 0
-    value = if flag(cpu, :c), do: (value <<< 1) ||| 0x1, else: value <<< 1
+    value = if flag(cp, :c), do: (value <<< 1) ||| 0x1, else: value <<< 1
     value = value &&& 0xff
     {value, carry}
   end
@@ -316,18 +274,12 @@ defmodule Gameboy.Cpu do
   def rrc_u8_byte_carry(value) do
     elem(@rrc, value)
   end
-  # def rrc_u8_byte_carry(value) do
-  #   carry = (value &&& 0x1) != 0
-  #   value = if carry, do: (value >>> 1) ||| 0x80, else: value >>> 1
-  #   value = value &&& 0xff
-  #   {value, carry}
-  # end
-  def rrc_u8_byte_carry(value, _cpu), do: rrc_u8_byte_carry(value)
+  def rrc_u8_byte_carry(value, _cp), do: rrc_u8_byte_carry(value)
 
   # Rotate u8 value to right through carry flag, old bit 0 to carry
-  def rr_u8_byte_carry(value, cpu) do
+  def rr_u8_byte_carry(value, cp) do
     carry = (value &&& 0x1) != 0
-    value = if flag(cpu, :c), do: (value >>> 1) ||| 0x80, else: value >>> 1
+    value = if flag(cp, :c), do: (value >>> 1) ||| 0x80, else: value >>> 1
     value = value &&& 0xff
     {value, carry}
   end
@@ -338,7 +290,7 @@ defmodule Gameboy.Cpu do
     value = (value <<< 1) &&& 0xff
     {value, carry}
   end
-  def sla_u8_byte_carry(value, _cpu), do: sla_u8_byte_carry(value)
+  def sla_u8_byte_carry(value, _cp), do: sla_u8_byte_carry(value)
 
   # Shift u8 value to right, msb doesn't change
   def sra_u8_byte_carry(value) do
@@ -355,191 +307,173 @@ defmodule Gameboy.Cpu do
     value = value >>> 1
     {value, carry}
   end
-  def srl_u8_byte_carry(value, _cpu), do: srl_u8_byte_carry(value)
+  def srl_u8_byte_carry(value, _cp), do: srl_u8_byte_carry(value)
 
   # Fetch 8 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
-  def fetch_imm8(%Cpu{pc: addr} = cpu, hw) do
+  def fetch_imm8(cpu(pc: addr) = cp, hw) do
     {value, hw} = Hardware.synced_read(hw, addr)
-    # {value, write_register(cpu, :pc, (addr + 1) &&& 0xffff), hw}
-    # {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
-    {value, Map.put(cpu, :pc, (addr + 1) &&& 0xffff), hw}
+    {value, cpu(cp, pc: (addr + 1) &&& 0xffff), hw}
   end
 
   # Fetch 16 bit value at pc. Returns tuple of {value, cpu, hw} as pc is incremented
-  def fetch_imm16(cpu, hw) do
-    {low, cpu, hw} = fetch_imm8(cpu, hw)
-    {high, cpu, hw} = fetch_imm8(cpu, hw)
-    # IO.puts("imm16 = low: #{Utils.to_hex(low)}, high: #{Utils.to_hex(high)}")
+  def fetch_imm16(cp, hw) do
+    {low, cp, hw} = fetch_imm8(cp, hw)
+    {high, cp, hw} = fetch_imm8(cp, hw)
     value = ((high <<< 8) &&& 0xff00) ||| (low &&& 0x00ff)
-    {value, cpu, hw}
+    {value, cp, hw}
   end
 
   # Push 16 bit to value to stack
-  def push_u16(%Cpu{sp: sp} = cpu, hw, data) do
+  def push_u16(cpu(sp: sp) = cp, hw, data) do
     low = data &&& 0xff
     high = (data >>> 8) &&& 0xff
     sp = (sp - 1) &&& 0xffff
-    # IO.puts("high sp = #{Utils.to_hex(sp)}")
     hw = Hardware.synced_write(hw, sp, high)
     sp = (sp - 1) &&& 0xffff
-    # IO.puts("low sp = #{Utils.to_hex(sp)}")
     hw = Hardware.synced_write(hw, sp, low)
-    {Map.put(cpu, :sp, sp), hw}
+    {cpu(cp, sp: sp), hw}
   end
 
   # Pop 16 bit value from stack
-  def pop_u16(%Cpu{sp: sp} = cpu, hw) do
+  def pop_u16(cpu(sp: sp) = cp, hw) do
     {low, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
     {high, hw} = Hardware.synced_read(hw, sp)
     sp = (sp + 1) &&& 0xffff
-    # {(high <<< 8) ||| low, Cpu.write_register(cpu, :sp, sp), hw}
-    {(high <<< 8) ||| low, Map.put(cpu, :sp, sp), hw}
+    {(high <<< 8) ||| low, cpu(cp, sp: sp), hw}
   end
 
-  # read for a single register
-  # for reg <- [:a, :f, :b, :c, :d, :e, :h, :l] do
-  #   def read(cpu, unquote(reg), hw), do: {read_register(cpu, unquote(reg)), cpu, hw}
-  # end
-  def read(cpu, :a, hw), do: {cpu.a, cpu, hw}
-  def read(cpu, :f, hw), do: {cpu.f, cpu, hw}
-  def read(cpu, :b, hw), do: {cpu.b, cpu, hw}
-  def read(cpu, :c, hw), do: {cpu.c, cpu, hw}
-  def read(cpu, :d, hw), do: {cpu.d, cpu, hw}
-  def read(cpu, :e, hw), do: {cpu.e, cpu, hw}
-  def read(cpu, :h, hw), do: {cpu.h, cpu, hw}
-  def read(cpu, :l, hw), do: {cpu.l, cpu, hw}
+  # Read for a single register
+  def read(cp, :a, hw), do: {cpu(cp, :a), cp, hw}
+  def read(cp, :f, hw), do: {cpu(cp, :f), cp, hw}
+  def read(cp, :b, hw), do: {cpu(cp, :b), cp, hw}
+  def read(cp, :c, hw), do: {cpu(cp, :c), cp, hw}
+  def read(cp, :d, hw), do: {cpu(cp, :d), cp, hw}
+  def read(cp, :e, hw), do: {cpu(cp, :e), cp, hw}
+  def read(cp, :h, hw), do: {cpu(cp, :h), cp, hw}
+  def read(cp, :l, hw), do: {cpu(cp, :l), cp, hw}
 
-  # read for an 8-bit immediate value (no write)
-  def read(cpu, :imm, hw), do: fetch_imm8(cpu, hw)
+  # Read for an 8-bit immediate value (no write)
+  def read(cp, :imm, hw), do: fetch_imm8(cp, hw)
 
-  # read for addr (16 bit registers or immediate address)
-  # reading from/writing to an address involves memory access == synced read/write
+  # Read for addr (16 bit registers or immediate address)
+  # Reading from/writing to an address involves memory access == synced read/write
   for reg <- [:bc, :de, :hl] do
-    def read(cpu, unquote(reg), hw) do
-      addr = read_register(cpu, unquote(reg))
+    def read(cp, unquote(reg), hw) do
+      addr = read_register(cp, unquote(reg))
       {value, hw} = Hardware.synced_read(hw, addr) 
-      {value, cpu, hw}
+      {value, cp, hw}
     end
   end
 
-  # read to HL and decrement/increment HL. Decrement/increment after addr is used
-  def read(cpu, :hld, hw) do
-    addr = read_register(cpu, :hl)
-    cpu = write_register(cpu, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
+  # Read from addr in HL and decrement/increment HL. Decrement/increment after addr is used
+  def read(cp, :hld, hw) do
+    addr = read_register(cp, :hl)
+    cp = write_register(cp, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
     {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu, hw}
+    {value, cp, hw}
+  end
+  def read(cp, :hli, hw) do
+    addr = read_register(cp, :hl)
+    cp = write_register(cp, :hl, (addr + 1) &&& 0xffff)  # wrapping add
+    {value, hw} = Hardware.synced_read(hw, addr)
+    {value, cp, hw}
   end
 
-  def read(cpu, :hli, hw) do
-    addr = read_register(cpu, :hl)
-    cpu = write_register(cpu, :hl, (addr + 1) &&& 0xffff)  # wrapping add
+  # Read from immediate addr
+  def read(cp, :immaddr, hw) do
+    {addr, cp, hw} = fetch_imm16(cp, hw)
     {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu, hw}
+    {value, cp, hw}
   end
 
-  # read for immediate addr
-  def read(cpu, :immaddr, hw) do
-    {addr, cpu, hw} = fetch_imm16(cpu, hw)
-    {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu, hw}
-  end
-
-  # read for high address (uses 8 bit immediate value for addr)
-  def read(cpu, :hi, hw) do
-    {addr, cpu, hw} = fetch_imm8(cpu, hw)
+  # Read from high address (uses 8 bit immediate value for addr)
+  def read(cp, :hi, hw) do
+    {addr, cp, hw} = fetch_imm8(cp, hw)
     addr = 0xff00 ||| addr
     {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu, hw}
+    {value, cp, hw}
   end
 
-  # read for high address but address is taken from c
-  def read(cpu, :hic, hw) do
-    addr = cpu.c
+  # Read from high address but address is taken from c
+  def read(cp, :hic, hw) do
+    addr = cpu(cp, :c)
     addr = 0xff00 ||| addr
     {value, hw} = Hardware.synced_read(hw, addr)
-    {value, cpu, hw}
+    {value, cp, hw}
   end
 
-
-  # write for a single register
-  # for reg <- [:a, :f, :b, :c, :d, :e, :h, :l] do
-  #   def write(cpu, unquote(reg), hw, data), do: {Map.put(cpu, unquote(reg), data), hw}
-  # end
-  def write(cpu, :a, hw, data), do: {Map.put(cpu, :a, data), hw}
+  # Write to a single register
+  def write(cp, :a, hw, data), do: {cpu(cp, a: data), hw}
   # Lower nibble of f is always zero
-  def write(cpu, :f, hw, data), do: {Map.put(cpu, :f, data &&& 0xf0), hw}
-  def write(cpu, :b, hw, data), do: {Map.put(cpu, :b, data), hw}
-  def write(cpu, :c, hw, data), do: {Map.put(cpu, :c, data), hw}
-  def write(cpu, :d, hw, data), do: {Map.put(cpu, :d, data), hw}
-  def write(cpu, :e, hw, data), do: {Map.put(cpu, :e, data), hw}
-  def write(cpu, :h, hw, data), do: {Map.put(cpu, :h, data), hw}
-  def write(cpu, :l, hw, data), do: {Map.put(cpu, :l, data), hw}
+  def write(cp, :f, hw, data), do: {cpu(cp, f: data &&& 0xf0), hw}
+  def write(cp, :b, hw, data), do: {cpu(cp, b: data), hw}
+  def write(cp, :c, hw, data), do: {cpu(cp, c: data), hw}
+  def write(cp, :d, hw, data), do: {cpu(cp, d: data), hw}
+  def write(cp, :e, hw, data), do: {cpu(cp, e: data), hw}
+  def write(cp, :h, hw, data), do: {cpu(cp, h: data), hw}
+  def write(cp, :l, hw, data), do: {cpu(cp, l: data), hw}
 
-  # write for addr (16 bit registers or immediate address)
+  # Write to addr (16 bit registers or immediate address)
   for reg <- [:bc, :de, :hl] do
-    def write(cpu, unquote(reg), hw, data) do
-      addr = read_register(cpu, unquote(reg))
-      {cpu, Hardware.synced_write(hw, addr, data)}
+    def write(cp, unquote(reg), hw, data) do
+      addr = read_register(cp, unquote(reg))
+      {cp, Hardware.synced_write(hw, addr, data)}
     end
   end
 
-  # write to HL and decrement/increment HL. Decrement/increment after addr is used
-  def write(cpu, :hld, hw, data) do
-    addr = read_register(cpu, :hl)
-    cpu = write_register(cpu, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
-    {cpu, Hardware.synced_write(hw, addr, data)}
+  # Write to addr in HL and decrement/increment HL. Decrement/increment after addr is used
+  def write(cp, :hld, hw, data) do
+    addr = read_register(cp, :hl)
+    cp = write_register(cp, :hl, (addr - 1) &&& 0xffff)  # wrapping sub
+    {cp, Hardware.synced_write(hw, addr, data)}
+  end
+  def write(cp, :hli, hw, data) do
+    addr = read_register(cp, :hl)
+    cp = write_register(cp, :hl, (addr + 1) &&& 0xffff)  # wrapping add
+    {cp, Hardware.synced_write(hw, addr, data)}
   end
 
-  def write(cpu, :hli, hw, data) do
-    addr = read_register(cpu, :hl)
-    cpu = write_register(cpu, :hl, (addr + 1) &&& 0xffff)  # wrapping add
-    {cpu, Hardware.synced_write(hw, addr, data)}
+  # Write to immediate addr
+  def write(cp, :immaddr, hw, data) do
+    {addr, cp, hw} = fetch_imm16(cp, hw)
+    {cp, Hardware.synced_write(hw, addr, data)}
   end
 
-  # write for immediate addr
-  def write(cpu, :immaddr, hw, data) do
-    {addr, cpu, hw} = fetch_imm16(cpu, hw)
-    {cpu, Hardware.synced_write(hw, addr, data)}
-  end
-
-  # write for high address (uses 8 bit immediate value for addr)
-  def write(cpu, :hi, hw, data) do
-    # IO.puts("cpu: #{inspect(cpu)}")
-    # IO.puts("data: #{Utils.to_hex(data)}")
-    {addr, cpu, hw} = fetch_imm8(cpu, hw)
+  # Write to high address (uses 8 bit immediate value for addr)
+  def write(cp, :hi, hw, data) do
+    {addr, cp, hw} = fetch_imm8(cp, hw)
     addr = 0xff00 ||| addr
-    {cpu, Hardware.synced_write(hw, addr, data)}
+    {cp, Hardware.synced_write(hw, addr, data)}
   end
 
-  # write for high address but address is taken from c
-  def write(cpu, :hic, hw, data) do
-    addr = cpu.c
+  # Write to high address but address is taken from c
+  def write(cp, :hic, hw, data) do
+    addr = cpu(cp, :c)
     addr = 0xff00 ||| addr
-    {cpu, Hardware.synced_write(hw, addr, data)}
+    {cp, Hardware.synced_write(hw, addr, data)}
   end
 
   # Update pc and enable interrupt immediately (used for RETI instruction)
   @compile {:inline, return_from_interrupt: 2}
-  def return_from_interrupt(cpu, ret_addr) do
-    %{cpu | pc: ret_addr, ime: true}
+  def return_from_interrupt(cp, ret_addr) do
+    cpu(cp, pc: ret_addr, ime: true)
   end
 
   @compile {:inline, set_ime: 2, ime: 1, apply_delayed_ime: 2}
-  def ime(cpu), do: cpu.ime
-  def set_ime(cpu, value), do: Map.put(cpu, :ime, value)
+  def ime(cp), do: cpu(cp, :ime)
+  def set_ime(cp, value), do: cpu(cp, ime: value)
   # Copy ime value from delayed_ime and set delayed_ime to nil
-  def apply_delayed_ime(cpu, value), do: %{cpu | ime: value, delayed_ime: nil}
+  def apply_delayed_ime(cp, value), do: cpu(cp, ime: value, delayed_ime: nil)
 
   @compile {:inline, set_delayed_ime: 2, delayed_ime: 1}
-  def set_delayed_ime(cpu, value), do: Map.put(cpu, :delayed_ime, value)
-  def delayed_ime(cpu), do: cpu.delayed_ime
+  def set_delayed_ime(cp, value), do: cpu(cp, delayed_ime: value)
+  def delayed_ime(cp), do: cpu(cp, :delayed_ime)
 
   @compile {:inline, set_state: 2, state: 1}
-  def state(cpu), do: cpu.state
-  def set_state(cpu, state), do: Map.put(cpu, :state, state)
+  def state(cp), do: cpu(cp, :state)
+  def set_state(cp, state), do: cpu(cp, state: state)
 
   @compile {:inline, opcode: 1}
-  def opcode(cpu), do: cpu.opcode
-
+  def opcode(cp), do: cpu(cp, :opcode)
 end
