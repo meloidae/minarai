@@ -1,5 +1,5 @@
 defmodule Gameboy.Dma do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Dma
 
   defstruct requested: false,

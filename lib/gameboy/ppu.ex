@@ -1,5 +1,5 @@
 defmodule Gameboy.Ppu do
-  use Bitwise
+  import Bitwise
   alias Gameboy.BinaryMemory, as: Memory
   alias Gameboy.AtomicsMemory, as: RWMemory
   alias Gameboy.Interrupts

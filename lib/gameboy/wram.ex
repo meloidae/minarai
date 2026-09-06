@@ -1,5 +1,5 @@
 defmodule Gameboy.Wram do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Wram
   alias Gameboy.AtomicsMemory, as: RWMemory
 

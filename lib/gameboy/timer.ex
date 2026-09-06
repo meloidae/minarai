@@ -1,5 +1,5 @@
 defmodule Gameboy.Timer do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Timer
   alias Gameboy.Interrupts
 

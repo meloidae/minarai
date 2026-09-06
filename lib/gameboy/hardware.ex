@@ -1,5 +1,5 @@
 defmodule Gameboy.Hardware do
-  use Bitwise
+  import Bitwise
   alias Gameboy.Hardware
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
