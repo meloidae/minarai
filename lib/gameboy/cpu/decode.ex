@@ -1,7 +1,6 @@
 defmodule Gameboy.Cpu.Decode do
   alias Gameboy.Cpu
   alias Gameboy.Cpu.Execute, as: Exec
-  alias Gameboy.Utils
   alias Gameboy.Hardware
 
   def cpu_step(cpu, hw) do

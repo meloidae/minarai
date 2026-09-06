@@ -1,7 +1,5 @@
 defmodule Gameboy.Interrupts do
   import Bitwise
-  alias Gameboy.Interrupts
-  alias Gameboy.Utils
 
   def init do
     0x00

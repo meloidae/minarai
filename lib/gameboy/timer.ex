@@ -1,6 +1,5 @@
 defmodule Gameboy.Timer do
   import Bitwise
-  alias Gameboy.Timer
   alias Gameboy.Interrupts
 
   require Record

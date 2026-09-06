@@ -1,6 +1,5 @@
 defmodule Gameboy.Hardware do
   import Bitwise
-  alias Gameboy.Hardware
   alias Gameboy.Bootrom
   alias Gameboy.Cartridge
   alias Gameboy.Ppu

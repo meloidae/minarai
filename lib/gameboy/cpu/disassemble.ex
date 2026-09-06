@@ -1,5 +1,4 @@
 defmodule Gameboy.Cpu.Disassemble do
-  alias Gameboy.Cpu
   alias Gameboy.Utils
 
   def disassemble(0x7f, cpu, hw), do: ld(cpu, hw, :a, :a)

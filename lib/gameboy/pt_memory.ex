@@ -1,6 +1,4 @@
 defmodule Gameboy.PtMemory do
-  alias Gameboy.PtMemory
-
   def init(name, bin) do
     data = :binary.bin_to_list(bin)
     |> List.to_tuple()

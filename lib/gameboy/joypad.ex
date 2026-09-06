@@ -1,6 +1,5 @@
 defmodule Gameboy.Joypad do
   import Bitwise
-  alias Gameboy.Joypad
   alias Gameboy.Interrupts
 
   # Use an 8-bit register to store states of 8 keys

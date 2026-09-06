@@ -5,8 +5,6 @@ defmodule Gameboy do
   # import Gameboy.Cpu.Decode, only: [decode_exec: 2]
   import Gameboy.Cpu.Decode, only: [cpu_step: 2]
   import Gameboy.Cpu.Disassemble, only: [disassemble: 3]
-  alias Gameboy.Joypad
-  alias Gameboy.Interrupts
   alias Gameboy.Utils
 
 

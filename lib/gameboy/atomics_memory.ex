@@ -1,6 +1,5 @@
 defmodule Gameboy.AtomicsMemory do
   import Bitwise
-  alias AtomicsMemory
 
   def init(size, _name), do: init(size)
   def init(size) do

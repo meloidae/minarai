@@ -1,6 +1,5 @@
 defmodule Gameboy.Hram do
   import Bitwise
-  alias Gameboy.Hram
   alias Gameboy.AtomicsMemory, as: RWMemory
 
   @hram_mask 0x007f

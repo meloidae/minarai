@@ -1,6 +1,5 @@
 defmodule Gameboy.Apu do
   import Bitwise
-  alias Gameboy.Apu
   alias Gameboy.MapMemory
 
   # Just implement read/write for now. No real audio functionality

@@ -1,6 +1,4 @@
 defmodule Gameboy.Bootrom do
-  alias Gameboy.Bootrom
-  alias Gameboy.Memory
   alias Gameboy.TupleMemory
 
   @path "roms/DMG_ROM.bin"
