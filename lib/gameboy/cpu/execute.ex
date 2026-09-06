@@ -29,7 +29,6 @@ defmodule Gameboy.Cpu.Execute do
   # 8 cycles
   def ld16_sp_hl(cpu, hw) do
     value = Cpu.read_register(cpu, :hl)
-    # cpu = Map.put(cpu, :sp, value)
     cpu = Cpu.write_register(cpu, :sp, value)
     {cpu, Hardware.sync_cycle(hw)} # Add 4 extra cycles
   end
@@ -37,7 +36,6 @@ defmodule Gameboy.Cpu.Execute do
   # LDHL SP, n
   # 12 cycles
   def ld16_hl_sp_n(cpu, hw) do
-    # sp = cpu.sp
     sp = Cpu.read_register(cpu, :sp)
     {offset, cpu, hw} = Cpu.fetch_imm8(cpu, hw)
     {value, carry, half_carry} = Cpu.add_u16_byte_carry(sp, offset)
@@ -49,7 +47,6 @@ defmodule Gameboy.Cpu.Execute do
   # LD (nn), SP
   # 20 cycles
   def ld16_nn_sp(cpu, hw) do
-    # value = cpu.sp
     value = Cpu.read_register(cpu, :sp)
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     hw = Hardware.synced_write(hw, addr, value &&& 0xff)
@@ -469,7 +466,6 @@ defmodule Gameboy.Cpu.Execute do
   def call_nn(cpu, hw) do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     hw = Hardware.sync_cycle(hw) # 4 extra cycles
-    # {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
     {cpu, hw} = Cpu.push_u16(cpu, hw, Cpu.read_register(cpu, :pc))
     {Cpu.write_register(cpu, :pc, addr), hw}
   end
@@ -479,7 +475,6 @@ defmodule Gameboy.Cpu.Execute do
     {addr, cpu, hw} = Cpu.fetch_imm16(cpu, hw)
     if Cpu.check_condition(cpu, cc) do
       hw = Hardware.sync_cycle(hw) # 4 extra cycles
-      # {cpu, hw} = Cpu.push_u16(cpu, hw, cpu.pc)
       {cpu, hw} = Cpu.push_u16(cpu, hw, Cpu.read_register(cpu, :pc))
       {Cpu.write_register(cpu, :pc, addr), hw}
     else
@@ -523,9 +518,7 @@ defmodule Gameboy.Cpu.Execute do
   # 16 cycles
   # Do return and enable interrupts right away (not delayed like EI)
   def reti(cpu, hw) do
-    # cpu = Map.put(cpu, :ime, true)
     {addr, cpu, hw} = Cpu.pop_u16(cpu, hw)
-    # cpu = Map.put(cpu, :pc, addr)
     {Cpu.return_from_interrupt(cpu, addr), Hardware.sync_cycle(hw)}
   end
 
