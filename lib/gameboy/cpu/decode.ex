@@ -27,15 +27,6 @@ defmodule Gameboy.Cpu.Decode do
     end
   end
 
-  # def decode_exec(%{opcode: opcode, delayed_ime: nil} = cpu, hw) do
-  #   instruction(opcode, cpu, hw)
-  # end
-  # def decode_exec(%{opcode: opcode, delayed_ime: ime_value} = cpu, hw) do
-  #   {cpu, hw} = instruction(opcode, cpu, hw)
-  #   # {%{cpu | ime: ime_value, delayed_ime: nil}, hw}
-  #   {Cpu.apply_delayed_ime(cpu), hw}
-  # end
-
   def decode_exec(cpu, hw) do
     opcode = Cpu.opcode(cpu)
     delayed_ime = Cpu.delayed_ime(cpu)
