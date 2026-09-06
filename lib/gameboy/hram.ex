@@ -1,8 +1,7 @@
 defmodule Gameboy.Hram do
   use Bitwise
   alias Gameboy.Hram
-  alias Gameboy.EtsMemory, as: RWMemory
-  # alias Gameboy.AtomicsMemory, as: RWMemory
+  alias Gameboy.AtomicsMemory, as: RWMemory
 
   # defstruct memory: nil
 

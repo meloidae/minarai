@@ -1,8 +1,7 @@
 defmodule Gameboy.Wram do
   use Bitwise
   alias Gameboy.Wram
-  alias Gameboy.EtsMemory, as: RWMemory
-  # alias Gameboy.AtomicsMemory, as: RWMemory
+  alias Gameboy.AtomicsMemory, as: RWMemory
 
   # defstruct memory: nil,
   #           offset: 0x1000 # CGB has switchable 1-7 high banks, but ignore that for now

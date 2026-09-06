@@ -1,7 +1,7 @@
 defmodule Gameboy.Ppu do
   use Bitwise
   alias Gameboy.BinaryMemory, as: Memory
-  alias Gameboy.EtsMemory, as: RWMemory
+  alias Gameboy.AtomicsMemory, as: RWMemory
   alias Gameboy.Interrupts
 
   require Record
